@@ -1,0 +1,11 @@
+[package]
+name = "rsact-demo"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Example binary exercising rsact-core"
+publish = false
+
+[dependencies]
+rsact-core = { path = "../rsact-core" }
