@@ -1,0 +1,22 @@
+name: Commit Messages
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  commitlint:
+    name: Validate commit messages (Conventional Commits)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Lint commits in this PR
+        uses: wagoid/commitlint-github-action@v6
+        with:
+          configFile: .github/commitlint.config.json
