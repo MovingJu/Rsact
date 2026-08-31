@@ -8,7 +8,10 @@ description = "C ABI bindings for rsact-core"
 
 [lib]
 name = "rsact_ffi"
-crate-type = ["cdylib", "staticlib"]
+crate-type = ["cdylib", "staticlib", "lib"]
 
 [dependencies]
 rsact-core = { path = "../rsact-core" }
+
+[build-dependencies]
+cbindgen = "0.29.4"
