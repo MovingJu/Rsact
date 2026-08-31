@@ -1,17 +1,21 @@
-use rsact_core::*;
+use rsact_core::{term::RawModeGuard, *};
 
 fn main() {
-    // Setup terminal and DOMS.
-    let (term_row, term_col) = term::terminal_size().expect("Can't size the terminal.");
-    let mut real_dom = buffer::Buffer::new(term_col, term_row);
-    let mut virtual_dom = buffer::Buffer::new(term_col, term_row);
+    // Setup terminal
+    let terminal = term::terminal_size().expect("Can't size the terminal.");
+    let _rmg = RawModeGuard::enable_safe_exit(terminal, std::io::stdout())
+        .expect("Failed to enter raw mode.");
+
+    // Setup DOMs and renderer.
+    let mut real_dom = buffer::Buffer::new(terminal.col, terminal.row);
+    let mut virtual_dom = buffer::Buffer::new(terminal.col, terminal.row);
+    let mut rend = renderer::Renderer::new(std::io::stdout());
 
     // Draw as you want.
-    rectangle(&mut virtual_dom, term_row, term_col);
+    rectangle(&mut virtual_dom, terminal.row, terminal.col);
 
     // Reflect your virtual DOM to terminal.
     let differences = diff::diff(&real_dom, &virtual_dom);
-    let mut rend = renderer::Renderer::new(std::io::stdout());
     rend.draw(&differences).expect("Failed stdout");
     real_dom = virtual_dom.clone();
 
@@ -21,23 +25,10 @@ fn main() {
         rectangle(&mut virtual_dom, 5 * i, 10 * i);
 
         let differences = diff::diff(&real_dom, &virtual_dom);
-        let mut rend = renderer::Renderer::new(std::io::stdout());
         rend.draw(&differences).expect("Failed stdout");
 
         std::thread::sleep(core::time::Duration::from_millis(500));
     }
-
-    virtual_dom.set(
-        term_row - 1,
-        term_col - 1,
-        cell::Cell {
-            ch: '#',
-            style: cell::Style::default(),
-        },
-    );
-    let differences = diff::diff(&real_dom, &virtual_dom);
-    let mut rend = renderer::Renderer::new(std::io::stdout());
-    rend.draw(&differences).expect("Failed stdout");
 
     std::thread::sleep(core::time::Duration::from_millis(3000));
     println!();

@@ -46,6 +46,18 @@ impl<W: Write> Renderer<W> {
         self.out.flush()?;
         Ok(())
     }
+    pub(crate) fn down_cursor(&mut self) -> io::Result<()> {
+        let mut buf: Vec<u8> = style_to_slice(&Style::default());
+        buf.push(b'\n');
+        self.out.write_all(&buf)?;
+        Ok(())
+    }
+    pub(crate) fn move_cursor(&mut self, row: u16, col: u16) -> io::Result<()> {
+        let mut buf: Vec<u8> = Vec::new();
+        move_cursor(&mut buf, row - 1, col - 1);
+        self.out.write_all(&buf)?;
+        Ok(())
+    }
 }
 static ESC: &str = "\x1b";
 static FAILED_TO_WRITE_BUFFER: &str = "Failed to write buffer vector.";
