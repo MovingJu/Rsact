@@ -134,7 +134,7 @@ mod tests {
         let mut rest = out;
         while let Some(start) = rest.find("\x1b[") {
             let after = &rest[start + 2..];
-            let Some(end) = after.find(|c: char| c == 'm' || c == 'H') else {
+            let Some(end) = after.find(['m', 'H']) else {
                 break;
             };
             if after.as_bytes()[end] == b'm' {

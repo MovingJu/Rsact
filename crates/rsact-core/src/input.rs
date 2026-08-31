@@ -118,7 +118,7 @@ fn simple_ascii_matching(ch: char) -> Key {
 ///
 /// ch should be within `0x01` to `0x1a`
 fn hex_to_key_ctrl(num: u8) -> Key {
-    Key::Ctrl((num + 'a' as u8 - 1) as char)
+    Key::Ctrl((num + b'a' - 1) as char)
 }
 
 #[cfg(test)]
