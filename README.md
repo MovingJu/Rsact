@@ -197,7 +197,7 @@ CI in this repository doesn't run builds or tests automatically yet — it's foc
 
 Both workflows accept the types `feat` / `fix` / `docs` / `style` / `refactor` / `perf` / `test` / `build` / `ci` / `chore` / `revert`.
 
-> The PR Title workflow failed once right after [#5](https://github.com/MovingJu/Rsact/pull/5) was merged, with `Resource not accessible by integration` — its `pull_request_target` trigger lacked `pull-requests: write` permission. That was fixed in the following commit, [`9c0b70b`](https://github.com/MovingJu/Rsact/commit/9c0b70b), which granted the permission; the badge will read green again from the next PR onward.
+> The PR Title workflow failed with `Resource not accessible by integration` twice: first right after [#5](https://github.com/MovingJu/Rsact/pull/5) was merged (its `pull_request_target` trigger lacked `pull-requests: write`, granted in [`9c0b70b`](https://github.com/MovingJu/Rsact/commit/9c0b70b)), then again on [#7](https://github.com/MovingJu/Rsact/pull/7) — `amannn/action-semantic-pull-request` also posts a commit status, which needs `statuses: write` specifically, not covered by `pull-requests: write`. Both permissions are granted now.
 
 ## Roadmap
 
