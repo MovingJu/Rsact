@@ -40,11 +40,12 @@ This repository is a Cargo workspace with three crates:
 
 ```
 Rsact/
+├── CMakeLists.txt          # Corrosion-based build exposing the rsact::rsact_ffi CMake target
 ├── crates/
 │   ├── rsact-core/        # buffer · cell · diff · renderer · term(+term_unix/term_windows) · input
 │   ├── rsact-demo/        # rsact-core-only demo (animated rectangle)
 │   └── rsact-ffi/         # C ABI; build.rs generates include/rsact.h via cbindgen
-├── examples/c/             # 3 C examples that statically link rsact-ffi, plus a Makefile
+├── examples/c/             # 3 C examples (src/) that link rsact-ffi via CMake FetchContent
 ├── .github/workflows/      # PR title & commit message convention checks
 ├── CONTRIBUTING.md
 └── LICENSE (MIT)
@@ -91,17 +92,37 @@ fn main() -> std::io::Result<()> {
 
 ### Using it from C/C++
 
-CMake `FetchContent` support is planned but not there yet ([#6](https://github.com/MovingJu/Rsact/issues/6)). For now, build the static library with `cargo` and link it directly.
+The recommended way to consume `rsact-ffi` from CMake is `FetchContent`, backed by [Corrosion](https://github.com/corrosion-rs/corrosion). Corrosion drives `cargo build` for you and exposes the result as a normal CMake target — no manual `cbindgen` step, no hunting for the built static lib.
+
+> **Prerequisite:** a Rust toolchain (`cargo`/`rustc`) must already be installed and on `PATH`. Corrosion orchestrates `cargo` on your behalf, but it does not install Rust itself — the only thing it provisions automatically via `rustup` is a missing cross-compilation *target*, not the toolchain.
+
+```cmake
+include(FetchContent)
+FetchContent_Declare(
+    rsact
+    GIT_REPOSITORY https://github.com/MovingJu/Rsact.git
+    GIT_TAG <tag-or-commit>   # no tagged releases yet — pin to a commit for now
+)
+FetchContent_MakeAvailable(rsact)
+
+target_link_libraries(my_app PRIVATE rsact::rsact_ffi)
+```
+
+`rsact::rsact_ffi` carries both the built library and the `cbindgen`-generated header as an interface include directory, so `#include "rsact.h"` just works — no manual `-I` flag needed. See [`examples/c/CMakeLists.txt`](examples/c/CMakeLists.txt) for a full working example (`cmake -S examples/c -B build && cmake --build build`).
+
+<details>
+<summary>Building manually with <code>cargo</code> instead of CMake</summary>
 
 ```sh
 git clone https://github.com/MovingJu/Rsact
 cd Rsact
 cargo build --release -p rsact-ffi   # produces target/release/librsact_ffi.a and include/rsact.h
 
-cd examples/c
-make            # builds basic / animate / input into build/
-./build/basic
+cc -I crates/rsact-ffi/include your_app.c target/release/librsact_ffi.a -o your_app
 ```
+</details>
+
+Either way, the C-side usage looks the same:
 
 ```c
 #include "rsact.h"
@@ -150,7 +171,7 @@ Both `rsact-demo` and `rsact-ffi`'s `rsact_render` follow exactly these five ste
 | `cargo run -p rsact-demo` | An animated growing rectangle, using `rsact-core` alone |
 | `cargo run --example basic -p rsact-ffi` | A single static frame (a horizontal line on row 0), then exits |
 | `cargo run --example animate -p rsact-ffi` | A `#` character moving across row 5 (~16ms/frame) |
-| `examples/c/basic.c` · `animate.c` · `input.c` + `Makefile` | The same two examples, plus key-input polling, reproduced in plain C statically linked against `librsact_ffi.a` |
+| `examples/c/src/basic.c` · `animate.c` · `input.c` | The same two examples, plus key-input polling, reproduced in plain C against `rsact-ffi`'s header. [`examples/c/CMakeLists.txt`](examples/c/CMakeLists.txt) builds `animate.c` via CMake `FetchContent`; `basic.c`/`input.c` aren't wired into it yet |
 
 ## Development
 
@@ -186,7 +207,7 @@ Summarized from the issue tracker:
 - [x] Fix: cursor not restored to a known position on exit ([#4](https://github.com/MovingJu/Rsact/issues/4), resolved by [#5](https://github.com/MovingJu/Rsact/pull/5))
 - [ ] **v0.2.0** — component tree: declarative composition + reconciliation ([#2](https://github.com/MovingJu/Rsact/issues/2))
 - [ ] **v0.3.0** — maximize performance of the diff/render pipeline, with opt-in multithreading ([#3](https://github.com/MovingJu/Rsact/issues/3))
-- [ ] CMake `FetchContent` integration — using [Corrosion](https://github.com/corrosion-rs/corrosion) so C/C++ consumers never need to know about `cargo build` or `cbindgen` directly ([#6](https://github.com/MovingJu/Rsact/issues/6))
+- [x] CMake `FetchContent` integration — using [Corrosion](https://github.com/corrosion-rs/corrosion) so C/C++ consumers never need to know about `cargo build` or `cbindgen` directly ([#6](https://github.com/MovingJu/Rsact/issues/6))
 
 Check the [issue tracker](https://github.com/MovingJu/Rsact/issues) for the latest status.
 
