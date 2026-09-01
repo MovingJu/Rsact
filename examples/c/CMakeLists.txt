@@ -9,9 +9,9 @@ include(FetchContent)
 FetchContent_Declare(
     Rsact
     GIT_REPOSITORY https://github.com/MovingJu/Rsact.git
-    GIT_TAG 9dbab11483f70e87aa7d9ca79608bec798a66b86
+    GIT_TAG c4f87cc8fce2e146b5aa3c17c5447d866264cfe7
 )
 FetchContent_MakeAvailable(Rsact)
 
-add_executable(rsact-cbin src/animate.c)
+add_executable(rsact-cbin src/input.c)
 target_link_libraries(rsact-cbin PRIVATE rsact::rsact_ffi)
