@@ -2,6 +2,8 @@
 
 [![Commit Messages](https://github.com/MovingJu/Rsact/actions/workflows/commitlint.yml/badge.svg)](https://github.com/MovingJu/Rsact/actions/workflows/commitlint.yml)
 [![PR Title](https://github.com/MovingJu/Rsact/actions/workflows/pr-title.yml/badge.svg)](https://github.com/MovingJu/Rsact/actions/workflows/pr-title.yml)
+[![crates.io](https://img.shields.io/crates/v/rsact-core.svg)](https://crates.io/crates/rsact-core)
+[![docs.rs](https://docs.rs/rsact-core/badge.svg)](https://docs.rs/rsact-core)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/MovingJu/Rsact/blob/main/LICENSE)
 [![Rust edition](https://img.shields.io/badge/edition-2024-orange.svg)](https://github.com/MovingJu/Rsact/blob/main/Cargo.toml)
 
