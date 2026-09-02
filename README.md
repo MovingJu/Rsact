@@ -45,7 +45,7 @@ Rsact/
 │   ├── rsact-core/        # buffer · cell · diff · renderer · term(+term_unix/term_windows) · input
 │   ├── rsact-demo/        # rsact-core-only demo (animated rectangle)
 │   └── rsact-ffi/         # C ABI; build.rs generates include/rsact.h via cbindgen
-├── examples/c/             # 3 C examples (src/) that link rsact-ffi via CMake FetchContent
+├── examples/c/             # 3 C examples (src/) linking a prebuilt rsact-ffi release via CMake FetchContent
 ├── .github/workflows/      # PR title & commit message convention checks
 ├── CONTRIBUTING.md
 └── LICENSE (MIT)
@@ -108,7 +108,9 @@ FetchContent_MakeAvailable(rsact)
 target_link_libraries(my_app PRIVATE rsact::rsact_ffi)
 ```
 
-`rsact::rsact_ffi` carries both the built library and the `cbindgen`-generated header as an interface include directory, so `#include "rsact.h"` just works — no manual `-I` flag needed. See [`examples/c/CMakeLists.txt`](examples/c/CMakeLists.txt) for a full working example (`cmake -S examples/c -B build && cmake --build build`).
+`rsact::rsact_ffi` carries both the built library and the `cbindgen`-generated header as an interface include directory, so `#include "rsact.h"` just works — no manual `-I` flag needed.
+
+[`examples/c/CMakeLists.txt`](examples/c/CMakeLists.txt) takes a different, dependency-free route: it skips Corrosion/`cargo` entirely and downloads the prebuilt `rsact-ffi` static lib + header for your platform straight from the matching [GitHub Release](https://github.com/MovingJu/Rsact/releases), so building it needs no Rust toolchain at all — just `cmake -S examples/c -B build && cmake --build build`. It covers the targets Rsact's release workflow publishes: `x86_64-unknown-linux-gnu`, `aarch64-apple-darwin`, and `x86_64-pc-windows-msvc`.
 
 <details>
 <summary>Building manually with <code>cargo</code> instead of CMake</summary>
@@ -171,7 +173,7 @@ Both `rsact-demo` and `rsact-ffi`'s `rsact_render` follow exactly these five ste
 | `cargo run -p rsact-demo` | An animated growing rectangle, using `rsact-core` alone |
 | `cargo run --example basic -p rsact-ffi` | A single static frame (a horizontal line on row 0), then exits |
 | `cargo run --example animate -p rsact-ffi` | A `#` character moving across row 5 (~16ms/frame) |
-| `examples/c/src/basic.c` · `animate.c` · `input.c` | The same two examples, plus key-input polling, reproduced in plain C against `rsact-ffi`'s header. [`examples/c/CMakeLists.txt`](examples/c/CMakeLists.txt) builds `animate.c` via CMake `FetchContent`; `basic.c`/`input.c` aren't wired into it yet |
+| `examples/c/src/basic.c` · `animate.c` · `input.c` | The same two examples, plus key-input polling, reproduced in plain C against `rsact-ffi`'s header. [`examples/c/CMakeLists.txt`](examples/c/CMakeLists.txt) builds all three against a prebuilt `rsact-ffi` downloaded from the matching GitHub Release |
 
 ## Development
 
