@@ -2,8 +2,8 @@
 
 [![Commit Messages](https://github.com/MovingJu/Rsact/actions/workflows/commitlint.yml/badge.svg)](https://github.com/MovingJu/Rsact/actions/workflows/commitlint.yml)
 [![PR Title](https://github.com/MovingJu/Rsact/actions/workflows/pr-title.yml/badge.svg)](https://github.com/MovingJu/Rsact/actions/workflows/pr-title.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Rust edition](https://img.shields.io/badge/edition-2024-orange.svg)](Cargo.toml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/MovingJu/Rsact/blob/main/LICENSE)
+[![Rust edition](https://img.shields.io/badge/edition-2024-orange.svg)](https://github.com/MovingJu/Rsact/blob/main/Cargo.toml)
 
 **A React-flavored virtual DOM rendering engine for the terminal.** Written in Rust, and exposed to C/C++ through a thin C ABI (`rsact-ffi`).
 
@@ -34,11 +34,11 @@ This repository is a Cargo workspace with three crates:
 
 | Crate | Kind | Description |
 |---|---|---|
-| [`rsact-core`](crates/rsact-core) | lib | The virtual terminal buffer, diffing, renderer, raw mode, and input parser. The heart of the project |
-| [`rsact-demo`](crates/rsact-demo) | bin (`publish = false`) | An example built on `rsact-core` alone — animates a growing rectangle |
-| [`rsact-ffi`](crates/rsact-ffi) | cdylib/staticlib/lib | A C ABI wrapper around `rsact-core`: a handle-based API plus a `cbindgen`-generated header |
+| [`rsact-core`](https://github.com/MovingJu/Rsact/tree/main/crates/rsact-core) | lib | The virtual terminal buffer, diffing, renderer, raw mode, and input parser. The heart of the project |
+| [`rsact-demo`](https://github.com/MovingJu/Rsact/tree/main/crates/rsact-demo) | bin (`publish = false`) | An example built on `rsact-core` alone — animates a growing rectangle |
+| [`rsact-ffi`](https://github.com/MovingJu/Rsact/tree/main/crates/rsact-ffi) | cdylib/staticlib/lib | A C ABI wrapper around `rsact-core`: a handle-based API plus a `cbindgen`-generated header |
 
-```
+```text
 Rsact/
 ├── CMakeLists.txt          # Corrosion-based build exposing the rsact::rsact_ffi CMake target
 ├── crates/
@@ -62,9 +62,9 @@ Not published to crates.io yet, so pull it in as a git dependency:
 rsact-core = { git = "https://github.com/MovingJu/Rsact", package = "rsact-core" }
 ```
 
-Minimal usage (see [`crates/rsact-demo/src/main.rs`](crates/rsact-demo/src/main.rs) for the full version):
+Minimal usage (see [`crates/rsact-demo/src/main.rs`](https://github.com/MovingJu/Rsact/blob/main/crates/rsact-demo/src/main.rs) for the full version):
 
-```rust
+```rust,no_run
 use rsact_core::{buffer::Buffer, cell::Cell, diff, renderer::Renderer, term};
 use rsact_core::term::RawModeGuard;
 
@@ -110,7 +110,7 @@ target_link_libraries(my_app PRIVATE rsact::rsact_ffi)
 
 `rsact::rsact_ffi` carries both the built library and the `cbindgen`-generated header as an interface include directory, so `#include "rsact.h"` just works — no manual `-I` flag needed.
 
-[`examples/c/CMakeLists.txt`](examples/c/CMakeLists.txt) takes a different, dependency-free route: it skips Corrosion/`cargo` entirely and downloads the prebuilt `rsact-ffi` static lib + header for your platform straight from the matching [GitHub Release](https://github.com/MovingJu/Rsact/releases), so building it needs no Rust toolchain at all — just `cmake -S examples/c -B build && cmake --build build`. It covers the targets Rsact's release workflow publishes: `x86_64-unknown-linux-gnu`, `aarch64-apple-darwin`, and `x86_64-pc-windows-msvc`.
+[`examples/c/CMakeLists.txt`](https://github.com/MovingJu/Rsact/blob/main/examples/c/CMakeLists.txt) takes a different, dependency-free route: it skips Corrosion/`cargo` entirely and downloads the prebuilt `rsact-ffi` static lib + header for your platform straight from the matching [GitHub Release](https://github.com/MovingJu/Rsact/releases), so building it needs no Rust toolchain at all — just `cmake -S examples/c -B build && cmake --build build`. It covers the targets Rsact's release workflow publishes: `x86_64-unknown-linux-gnu`, `aarch64-apple-darwin`, and `x86_64-pc-windows-msvc`.
 
 <details>
 <summary>Building manually with <code>cargo</code> instead of CMake</summary>
@@ -143,11 +143,11 @@ int main(void) {
 }
 ```
 
-The full C ABI surface is in [`crates/rsact-ffi/include/rsact.h`](crates/rsact-ffi/include/rsact.h) — `rsact_create` / `rsact_terminal_size` / `rsact_set_cell` / `rsact_render` / `rsact_poll_key` / `rsact_destroy`, plus the `RsactKeyEvent` struct and `RSACT_KEY_*` constants.
+The full C ABI surface is in [`crates/rsact-ffi/include/rsact.h`](https://github.com/MovingJu/Rsact/blob/main/crates/rsact-ffi/include/rsact.h) — `rsact_create` / `rsact_terminal_size` / `rsact_set_cell` / `rsact_render` / `rsact_poll_key` / `rsact_destroy`, plus the `RsactKeyEvent` struct and `RSACT_KEY_*` constants.
 
 ## How it works (the render pipeline)
 
-```
+```text
 virtual_dom.set(row, col, cell)   draw the frame you want into the virtual buffer
         │
         ▼
@@ -173,7 +173,7 @@ Both `rsact-demo` and `rsact-ffi`'s `rsact_render` follow exactly these five ste
 | `cargo run -p rsact-demo` | An animated growing rectangle, using `rsact-core` alone |
 | `cargo run --example basic -p rsact-ffi` | A single static frame (a horizontal line on row 0), then exits |
 | `cargo run --example animate -p rsact-ffi` | A `#` character moving across row 5 (~16ms/frame) |
-| `examples/c/src/basic.c` · `animate.c` · `input.c` | The same two examples, plus key-input polling, reproduced in plain C against `rsact-ffi`'s header. [`examples/c/CMakeLists.txt`](examples/c/CMakeLists.txt) builds all three against a prebuilt `rsact-ffi` downloaded from the matching GitHub Release |
+| `examples/c/src/basic.c` · `animate.c` · `input.c` | The same two examples, plus key-input polling, reproduced in plain C against `rsact-ffi`'s header. [`examples/c/CMakeLists.txt`](https://github.com/MovingJu/Rsact/blob/main/examples/c/CMakeLists.txt) builds all three against a prebuilt `rsact-ffi` downloaded from the matching GitHub Release |
 
 ## Development
 
@@ -186,7 +186,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 - **MSRV**: the workspace uses `edition = "2024"`, which requires Rust 1.85 or newer.
 - `rsact-core` currently has 46 unit tests — buffer bounds checks, a seeded property test proving that applying `diff`'s patches reconstructs the next frame exactly (using a tiny hand-rolled xorshift32 PRNG, no external dependency), and coverage for the renderer not re-emitting SGR codes unnecessarily.
-- Commit and PR conventions for contributors are documented in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+- Commit and PR conventions for contributors are documented in [`CONTRIBUTING.md`](https://github.com/MovingJu/Rsact/blob/main/CONTRIBUTING.md).
 
 ## CI
 
@@ -194,8 +194,8 @@ CI in this repository doesn't run builds or tests automatically yet — it's foc
 
 | Workflow | File | Trigger | What it does |
 |---|---|---|---|
-| **Commit Messages** | [`commitlint.yml`](.github/workflows/commitlint.yml) | PR opened/edited/synchronize/reopened | Lints every commit message in the PR with [commitlint](https://commitlint.js.org/) (`@commitlint/config-conventional`, plus a 72-char header limit and a lowercase-subject rule) |
-| **PR Title** | [`pr-title.yml`](.github/workflows/pr-title.yml) | PR opened/edited/synchronize/reopened | Checks that the PR title follows `type(scope): summary` (Conventional Commits) with a lowercase subject, via [`amannn/action-semantic-pull-request`](https://github.com/amannn/action-semantic-pull-request) — the title becomes the squash-merge commit message |
+| **Commit Messages** | [`commitlint.yml`](https://github.com/MovingJu/Rsact/blob/main/.github/workflows/commitlint.yml) | PR opened/edited/synchronize/reopened | Lints every commit message in the PR with [commitlint](https://commitlint.js.org/) (`@commitlint/config-conventional`, plus a 72-char header limit and a lowercase-subject rule) |
+| **PR Title** | [`pr-title.yml`](https://github.com/MovingJu/Rsact/blob/main/.github/workflows/pr-title.yml) | PR opened/edited/synchronize/reopened | Checks that the PR title follows `type(scope): summary` (Conventional Commits) with a lowercase subject, via [`amannn/action-semantic-pull-request`](https://github.com/amannn/action-semantic-pull-request) — the title becomes the squash-merge commit message |
 
 Both workflows accept the types `feat` / `fix` / `docs` / `style` / `refactor` / `perf` / `test` / `build` / `ci` / `chore` / `revert`.
 
@@ -215,7 +215,7 @@ Check the [issue tracker](https://github.com/MovingJu/Rsact/issues) for the late
 
 ## Contributing
 
-Issues and PRs are welcome. Before opening a PR, please read the commit/PR title conventions in [`CONTRIBUTING.md`](CONTRIBUTING.md) (Conventional Commits, enforced by CI).
+Issues and PRs are welcome. Before opening a PR, please read the commit/PR title conventions in [`CONTRIBUTING.md`](https://github.com/MovingJu/Rsact/blob/main/CONTRIBUTING.md) (Conventional Commits, enforced by CI).
 
 1. Branch off `main`.
 2. Make sure `cargo build --workspace && cargo test --workspace && cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings` all pass.
@@ -223,4 +223,4 @@ Issues and PRs are welcome. Before opening a PR, please read the commit/PR title
 
 ## License
 
-[MIT License](LICENSE) © 2026 [MovingJu](https://github.com/MovingJu)
+[MIT License](https://github.com/MovingJu/Rsact/blob/main/LICENSE) © 2026 [MovingJu](https://github.com/MovingJu)
