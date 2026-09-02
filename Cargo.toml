@@ -4,6 +4,7 @@ members = ["crates/*"]
 
 [workspace.package]
 version = "0.1.2"
+description = "A React-flavored virtual DOM rendering engine for the terminal."
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/MovingJu/Rsact"
