@@ -1,0 +1,49 @@
+name: Feature request
+description: Suggest a new feature or enhancement
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please keep the issue title in [Conventional Commits](../../CONTRIBUTING.md)
+        style (`feat: short summary`) — it becomes the branch/commit summary
+        once this is picked up.
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Affected crate / scope
+      options:
+        - rsact-core
+        - rsact-ffi
+        - rsact-demo
+        - examples
+        - build
+        - ci
+        - other / not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What's missing or awkward today? What are you trying to do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: What would you like to happen? API sketch welcome.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false
