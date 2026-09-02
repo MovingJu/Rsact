@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Contributing guide
+    url: https://github.com/MovingJu/Rsact/blob/main/CONTRIBUTING.md
+    about: Read the commit / PR / branch naming conventions before opening an issue or PR.
