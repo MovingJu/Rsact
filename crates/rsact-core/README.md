@@ -1,5 +1,9 @@
 # rsact-core
 
+[![crates.io](https://img.shields.io/crates/v/rsact-core.svg)](https://crates.io/crates/rsact-core)
+[![docs.rs](https://docs.rs/rsact-core/badge.svg)](https://docs.rs/rsact-core)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/MovingJu/Rsact/blob/main/LICENSE)
+
 **The virtual terminal buffer, diffing, and rendering engine behind [Rsact](https://github.com/MovingJu/Rsact).**
 
 You draw the state you want into a virtual buffer — a grid of cells, each a character plus a style. `rsact-core` diffs that buffer against the last frame it actually drew, and turns only the cells that changed into the minimal set of ANSI escape sequences needed, sent to the terminal in a **single `write()` call**.
