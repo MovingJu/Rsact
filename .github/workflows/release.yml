@@ -1,0 +1,95 @@
+name: Release
+
+# Runs only after "Tag Version Check" finishes successfully on a tag push
+# (see tag-version.yml) — this is the gate: a malformed or mismatched tag
+# never reaches the build/publish steps below.
+on:
+  workflow_run:
+    workflows: ["Tag Version Check"]
+    types: [completed]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.event.workflow_run.conclusion == 'success'
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build rsact-ffi (release, staticlib)
+        run: cargo build --release -p rsact-ffi --target ${{ matrix.target }}
+
+      # cbindgen (run by rsact-ffi's build.rs) writes to crates/rsact-ffi/include/rsact.h
+      # regardless of target, so every archive below carries a header that
+      # matches the ABI it was built with.
+      - name: Package archive (unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          stage="rsact-${{ matrix.target }}"
+          mkdir -p "$stage/lib" "$stage/include"
+          cp "target/${{ matrix.target }}/release/librsact_ffi.a" "$stage/lib/"
+          cp crates/rsact-ffi/include/rsact.h "$stage/include/"
+          tar czf "$stage.tar.gz" "$stage"
+          sha256sum "$stage.tar.gz" > "$stage.tar.gz.sha256"
+
+      - name: Package archive (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $stage = "rsact-${{ matrix.target }}"
+          New-Item -ItemType Directory -Force -Path "$stage/lib", "$stage/include" | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/rsact_ffi.lib" "$stage/lib/"
+          Copy-Item "crates/rsact-ffi/include/rsact.h" "$stage/include/"
+          Compress-Archive -Path $stage -DestinationPath "$stage.zip"
+          (Get-FileHash "$stage.zip" -Algorithm SHA256).Hash.ToLower() + "  $stage.zip" `
+            | Out-File -Encoding ascii "$stage.zip.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rsact-${{ matrix.target }}
+          path: |
+            rsact-${{ matrix.target }}.tar.gz
+            rsact-${{ matrix.target }}.tar.gz.sha256
+            rsact-${{ matrix.target }}.zip
+            rsact-${{ matrix.target }}.zip.sha256
+          if-no-files-found: ignore
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create release with all platform archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          gh release create "$TAG" dist/* \
+            --repo "${{ github.repository }}" \
+            --title "$TAG" \
+            --generate-notes

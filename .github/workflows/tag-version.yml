@@ -1,0 +1,38 @@
+name: Tag Version Check
+
+# Runs on every tag push. Only tags matching vX.Y.Z (strict semver, no
+# prerelease/build suffix) are accepted, and the numeric part must match
+# `workspace.package.version` in the root Cargo.toml — this is what the
+# release CD (release.yml) is gated on via workflow_run.
+on:
+  push:
+    tags:
+      - "*"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-tag:
+    name: Validate tag format and Cargo.toml version match
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check tag matches vX.Y.Z
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag '$tag' does not match the required vX.Y.Z format (e.g. v0.1.2)."
+            exit 1
+          fi
+          echo "tag_version=${tag#v}" >> "$GITHUB_ENV"
+
+      - name: Check tag matches workspace version in Cargo.toml
+        run: |
+          cargo_version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)
+          if [ "$cargo_version" != "$tag_version" ]; then
+            echo "::error::Tag version '$tag_version' does not match Cargo.toml workspace.package.version '$cargo_version'."
+            exit 1
+          fi
+          echo "Tag v$tag_version matches Cargo.toml ($cargo_version)."
