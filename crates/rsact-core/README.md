@@ -18,6 +18,7 @@ You draw the state you want into a virtual buffer — a grid of cells, each a ch
 - **Batched renderer** — one cursor move per patch, an SGR sequence only when the style actually changes, the whole frame flushed in a single syscall.
 - **Cursor restored on exit** — `RawModeGuard::enable_safe_exit` moves the cursor to the terminal's last row/col and emits a trailing newline on `Drop`.
 - **UTF-8-aware input parser** — arrow keys, Ctrl+letter, Backspace/Enter/Esc, and multi-byte UTF-8 characters all decode correctly from a single `read_key()` call.
+- **Declarative component tree** — describe the screen as a tree of `Component`s (`component`/`element`/`tree` modules); `Tree` reconciles consecutive frames by `Key` and repaints only what changed. See [Component tree](#component-tree) below.
 
 ## Quick start
 
@@ -65,6 +66,44 @@ one write_all() call flushes the whole frame to the terminal
         ▼
 real_dom = virtual_dom.clone()   commit as the baseline for the next diff
 ```
+
+## Component tree
+
+On top of that flat-buffer pipeline, this crate also has a declarative layer: describe the screen as a tree of `Component`s, and let `Tree` figure out which cells actually need repainting between frames.
+
+```rust,no_run
+use rsact_core::{component::Component, element::{Element, Layout}, renderer::Renderer, tree::Tree};
+
+struct Counter { label: &'static str, count: u32 }
+
+impl Component for Counter {
+    fn render(&self) -> Element {
+        Element::container(
+            self.label,
+            Layout::Vertical,
+            vec![
+                Element::text("label", self.label).width(20),
+                Element::text("value", self.count.to_string()).width(20),
+            ],
+        )
+        .width(20)
+        .height(2)
+    }
+}
+
+fn main() -> std::io::Result<()> {
+    let mut renderer = Renderer::new(std::io::stdout());
+    let mut tree = Tree::new(Counter { label: "left", count: 0 }, 20, 2);
+
+    for _ in 0..5 {
+        tree.present(&mut renderer)?; // render → reconcile → diff → draw → sync
+        tree.root_mut().count += 1;
+    }
+    Ok(())
+}
+```
+
+`Tree` keeps the previous frame's tree and reconciles the new one against it by matching children **by `Key`, not list position** — an unchanged subtree costs zero `Buffer` writes, and a reordered keyed child is recognized as "moved" rather than removed-then-re-added. See [`docs/component-tree.md`](https://github.com/MovingJu/Rsact/blob/main/docs/component-tree.md) in the workspace root for the full concepts walkthrough and a nested-tree diagram.
 
 ## Learn more
 

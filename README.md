@@ -11,7 +11,7 @@
 
 You draw the state you want into a virtual buffer — a grid of cells, each a character plus a style. `rsact-core` diffs that buffer against the last frame it actually drew, and turns only the cells that changed into the minimal set of ANSI escape sequences needed, sent to the terminal in a **single `write()` call**. It's the same idea React applies to the real DOM, applied to a terminal's cell grid instead.
 
-> This is an actively developed personal project (currently v0.1.1). The API is not yet stable — see the [Roadmap](#roadmap) below.
+> This is an actively developed personal project (currently v0.1.2). The API is not yet stable — see the [Roadmap](#roadmap) below.
 
 ## What is this?
 
@@ -29,6 +29,7 @@ You draw the state you want into a virtual buffer — a grid of cells, each a ch
 - **Cursor restored on exit** — `RawModeGuard::enable_safe_exit` moves the cursor to the terminal's last row/col and emits a trailing newline on `Drop`, so the shell prompt doesn't land on top of the last frame ([#4](https://github.com/MovingJu/Rsact/issues/4), fixed in [#5](https://github.com/MovingJu/Rsact/pull/5))
 - **UTF-8-aware input parser** — arrow keys, Ctrl+letter, Backspace/Enter/Esc, and multi-byte UTF-8 characters (Korean syllables, emoji) all decode correctly from a single `read_key()` call
 - **Auto-generated C header** — `rsact-ffi`'s `build.rs` regenerates `include/rsact.h` via `cbindgen` on every build
+- **Declarative component tree** ([v0.2.0](https://github.com/MovingJu/Rsact/issues/2)) — describe the screen as a tree of `Component`s instead of hand-writing `set_cell` calls; `Tree` reconciles consecutive frames by `Key` and repaints only what changed. See [`docs/component-tree.md`](docs/component-tree.md) and the [Component tree](#component-tree) section below.
 
 ## Crate layout
 
@@ -45,9 +46,11 @@ Rsact/
 ├── CMakeLists.txt          # Corrosion-based build exposing the rsact::rsact_ffi CMake target
 ├── crates/
 │   ├── rsact-core/        # buffer · cell · diff · renderer · term(+term_unix/term_windows) · input
-│   ├── rsact-demo/        # rsact-core-only demo (animated rectangle)
+│   │                       # + component · element · tree (the v0.2.0 component-tree layer)
+│   ├── rsact-demo/        # rsact-core-only demo (animated rectangle + a Dashboard/Counter component tree)
 │   └── rsact-ffi/         # C ABI; build.rs generates include/rsact.h via cbindgen
 ├── examples/c/             # 3 C examples (src/) linking a prebuilt rsact-ffi release via CMake FetchContent
+├── docs/                   # component-tree.md — component tree concepts, diagrams, and a full example
 ├── .github/workflows/      # PR title & commit message convention checks
 ├── CONTRIBUTING.md
 └── LICENSE (MIT)
@@ -168,11 +171,70 @@ real_dom = virtual_dom.clone()   commit as the baseline for the next diff
 
 Both `rsact-demo` and `rsact-ffi`'s `rsact_render` follow exactly these five steps.
 
+## Component tree
+
+On top of the flat-buffer pipeline above, v0.2.0 ([#2](https://github.com/MovingJu/Rsact/issues/2)) adds a declarative layer: describe the screen as a tree of `Component`s, and let `Tree` figure out which cells actually need repainting between frames.
+
+```rust,no_run
+use rsact_core::{component::Component, element::{Element, Layout}, renderer::Renderer, tree::Tree};
+
+struct Counter { label: &'static str, count: u32 }
+
+impl Component for Counter {
+    fn render(&self) -> Element {
+        Element::container(
+            self.label,
+            Layout::Vertical,
+            vec![
+                Element::text("label", self.label).width(20),
+                Element::text("value", self.count.to_string()).width(20),
+            ],
+        )
+        .width(20)
+        .height(2)
+    }
+}
+
+fn main() -> std::io::Result<()> {
+    let mut renderer = Renderer::new(std::io::stdout());
+    let mut tree = Tree::new(Counter { label: "left", count: 0 }, 20, 2);
+
+    for _ in 0..5 {
+        tree.present(&mut renderer)?; // render → reconcile → diff → draw → sync
+        tree.root_mut().count += 1;
+    }
+    Ok(())
+}
+```
+
+`Tree` keeps the previous frame's tree around and reconciles the new one against it by matching children **by `Key`, not list position** — an unchanged subtree costs zero `Buffer` writes, a reordered keyed child is recognized as "moved" rather than removed-then-re-added, and only what actually changed feeds into the v0.1 `diff`/`Renderer` pipeline:
+
+```text
+Component::render()          build a fresh Element tree from current state
+        │
+        ▼
+Tree reconciles              walk next tree vs. previous tree, paired by Key
+        │
+        ├─ unchanged        ──▶  skip — zero Buffer writes
+        ├─ changed / new    ──▶  paint this node's cells
+        └─ key removed      ──▶  clear its old Rect
+        ▼
+Buffer                        only the cells above were touched this frame
+        │
+        ▼
+Tree::present(&mut renderer)  diff(on_screen, buffer) → Patch runs (v0.1 pipeline)
+        │                     Renderer::draw(&patches) → one write_all()
+        ▼
+on_screen = buffer.clone()    commit as the baseline for the next frame
+```
+
+See [`docs/component-tree.md`](docs/component-tree.md) for the full concepts walkthrough (`Element`, `Key`, `Layout`, `Component`, `Tree`), a diagram of a nested tree, and this milestone's current limitations.
+
 ## Examples
 
 | Run it with | What it shows |
 |---|---|
-| `cargo run -p rsact-demo` | An animated growing rectangle, using `rsact-core` alone |
+| `cargo run -p rsact-demo` | An animated growing rectangle, then a `Dashboard` of two nested `Counter` components driven through `Tree::present` |
 | `cargo run --example basic -p rsact-ffi` | A single static frame (a horizontal line on row 0), then exits |
 | `cargo run --example animate -p rsact-ffi` | A `#` character moving across row 5 (~16ms/frame) |
 | `examples/c/src/basic.c` · `animate.c` · `input.c` | The same two examples, plus key-input polling, reproduced in plain C against `rsact-ffi`'s header. [`examples/c/CMakeLists.txt`](https://github.com/MovingJu/Rsact/blob/main/examples/c/CMakeLists.txt) builds all three against a prebuilt `rsact-ffi` downloaded from the matching GitHub Release |
@@ -187,7 +249,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 ```
 
 - **MSRV**: the workspace uses `edition = "2024"`, which requires Rust 1.85 or newer.
-- `rsact-core` currently has 46 unit tests — buffer bounds checks, a seeded property test proving that applying `diff`'s patches reconstructs the next frame exactly (using a tiny hand-rolled xorshift32 PRNG, no external dependency), and coverage for the renderer not re-emitting SGR codes unnecessarily.
+- `rsact-core` currently has 55 unit tests — buffer bounds checks, a seeded property test proving that applying `diff`'s patches reconstructs the next frame exactly (using a tiny hand-rolled xorshift32 PRNG, no external dependency), coverage for the renderer not re-emitting SGR codes unnecessarily, and reconciler tests covering keyed add/remove/reorder plus a counting-sink test proving unchanged subtrees cost zero `Buffer` writes.
 - Commit and PR conventions for contributors are documented in [`CONTRIBUTING.md`](https://github.com/MovingJu/Rsact/blob/main/CONTRIBUTING.md).
 
 ## CI
@@ -209,7 +271,7 @@ Summarized from the issue tracker:
 
 - [x] **v0.1 MVP** — cell-buffer virtual DOM diff/render engine + C/C++ FFI ([#1](https://github.com/MovingJu/Rsact/issues/1)) — this is the state of the repository today.
 - [x] Fix: cursor not restored to a known position on exit ([#4](https://github.com/MovingJu/Rsact/issues/4), resolved by [#5](https://github.com/MovingJu/Rsact/pull/5))
-- [ ] **v0.2.0** — component tree: declarative composition + reconciliation ([#2](https://github.com/MovingJu/Rsact/issues/2))
+- [x] **v0.2.0** — component tree: declarative composition + reconciliation ([#2](https://github.com/MovingJu/Rsact/issues/2), resolved by [#25](https://github.com/MovingJu/Rsact/pull/25))
 - [ ] **v0.3.0** — maximize performance of the diff/render pipeline, with opt-in multithreading ([#3](https://github.com/MovingJu/Rsact/issues/3))
 - [x] CMake `FetchContent` integration — using [Corrosion](https://github.com/corrosion-rs/corrosion) so C/C++ consumers never need to know about `cargo build` or `cbindgen` directly ([#6](https://github.com/MovingJu/Rsact/issues/6))
 
