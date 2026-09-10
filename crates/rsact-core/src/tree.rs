@@ -157,7 +157,6 @@ fn clear_rect<P: Paint>(rect: Rect, sink: &mut P) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cell::Style;
     use crate::element::Layout;
 
     /// Wraps a `Buffer`, counting every `paint` call so tests can assert
@@ -194,13 +193,13 @@ mod tests {
         let tree = Element::container(
             "root",
             Layout::Vertical,
-            10,
-            2,
             vec![
-                Element::text("a", 10, "hello", Style::default()),
-                Element::text("b", 10, "world", Style::default()),
+                Element::text("a", "hello").width(10),
+                Element::text("b", "world").width(10),
             ],
-        );
+        )
+        .width(10)
+        .height(2);
         let rect = full_rect(&buffer);
 
         reconcile_paint(&tree, rect, None, &mut buffer);
@@ -216,13 +215,13 @@ mod tests {
             Element::container(
                 "root",
                 Layout::Vertical,
-                10,
-                2,
                 vec![
-                    Element::text("a", 10, "static", Style::default()),
-                    Element::text("b", 10, "changes", Style::default()),
+                    Element::text("a", "static").width(10),
+                    Element::text("b", "changes").width(10),
                 ],
             )
+            .width(10)
+            .height(2)
         };
         let rect = full_rect(&buffer);
         let first = make_tree();
@@ -231,13 +230,13 @@ mod tests {
         let second = Element::container(
             "root",
             Layout::Vertical,
-            10,
-            2,
             vec![
-                Element::text("a", 10, "static", Style::default()),
-                Element::text("b", 10, "changed!", Style::default()),
+                Element::text("a", "static").width(10),
+                Element::text("b", "changed!").width(10),
             ],
-        );
+        )
+        .width(10)
+        .height(2);
 
         let mut sink = CountingSink {
             buffer: &mut buffer,
@@ -262,13 +261,13 @@ mod tests {
         let first = Element::container(
             "root",
             Layout::Vertical,
-            10,
-            2,
             vec![
-                Element::text("a", 10, "AAA", Style::default()),
-                Element::text("b", 10, "BBB", Style::default()),
+                Element::text("a", "AAA").width(10),
+                Element::text("b", "BBB").width(10),
             ],
-        );
+        )
+        .width(10)
+        .height(2);
         reconcile_paint(&first, rect, None, &mut buffer);
 
         // swap order: "b" now first, "a" now second. Neither child's own
@@ -278,13 +277,13 @@ mod tests {
         let second = Element::container(
             "root",
             Layout::Vertical,
-            10,
-            2,
             vec![
-                Element::text("b", 10, "BBB", Style::default()),
-                Element::text("a", 10, "AAA", Style::default()),
+                Element::text("b", "BBB").width(10),
+                Element::text("a", "AAA").width(10),
             ],
-        );
+        )
+        .width(10)
+        .height(2);
         reconcile_paint(&second, rect, Some((&first, rect)), &mut buffer);
 
         assert_eq!(text_at(0, 0, 3, &buffer), "BBB");
@@ -298,22 +297,22 @@ mod tests {
         let first = Element::container(
             "root",
             Layout::Vertical,
-            10,
-            2,
             vec![
-                Element::text("a", 10, "AAA", Style::default()),
-                Element::text("b", 10, "BBB", Style::default()),
+                Element::text("a", "AAA").width(10),
+                Element::text("b", "BBB").width(10),
             ],
-        );
+        )
+        .width(10)
+        .height(2);
         reconcile_paint(&first, rect, None, &mut buffer);
 
         let second = Element::container(
             "root",
             Layout::Vertical,
-            10,
-            2,
-            vec![Element::text("a", 10, "AAA", Style::default())],
-        );
+            vec![Element::text("a", "AAA").width(10)],
+        )
+        .width(10)
+        .height(2);
         reconcile_paint(&second, rect, Some((&first, rect)), &mut buffer);
 
         assert_eq!(text_at(0, 0, 3, &buffer), "AAA");
@@ -327,22 +326,22 @@ mod tests {
         let first = Element::container(
             "root",
             Layout::Vertical,
-            10,
-            1,
-            vec![Element::text("a", 10, "AAA", Style::default())],
-        );
+            vec![Element::text("a", "AAA").width(10)],
+        )
+        .width(10)
+        .height(1);
         reconcile_paint(&first, rect, None, &mut buffer);
 
         let second = Element::container(
             "root",
             Layout::Vertical,
-            10,
-            2,
             vec![
-                Element::text("a", 10, "AAA", Style::default()),
-                Element::text("b", 10, "BBB", Style::default()),
+                Element::text("a", "AAA").width(10),
+                Element::text("b", "BBB").width(10),
             ],
-        );
+        )
+        .width(10)
+        .height(2);
         reconcile_paint(&second, rect, Some((&first, rect)), &mut buffer);
 
         assert_eq!(text_at(0, 0, 3, &buffer), "AAA");
@@ -358,13 +357,13 @@ mod tests {
             Element::container(
                 "counter",
                 Layout::Vertical,
-                20,
-                2,
                 vec![
-                    Element::text("label", 20, "count:", Style::default()),
-                    Element::text("value", 20, self.count.to_string(), Style::default()),
+                    Element::text("label", "count:").width(20),
+                    Element::text("value", self.count.to_string()).width(20),
                 ],
             )
+            .width(20)
+            .height(2)
         }
     }
 
@@ -378,8 +377,6 @@ mod tests {
             Element::container(
                 "app",
                 Layout::Horizontal,
-                40,
-                2,
                 vec![
                     {
                         let mut e = self.left.render();
@@ -393,6 +390,8 @@ mod tests {
                     },
                 ],
             )
+            .width(40)
+            .height(2)
         }
     }
 

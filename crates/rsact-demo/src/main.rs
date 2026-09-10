@@ -1,5 +1,4 @@
 use rsact_core::{
-    cell::Style,
     component::Component,
     element::{Element, Layout},
     term::RawModeGuard,
@@ -57,13 +56,13 @@ impl Component for Counter {
         Element::container(
             self.label,
             Layout::Vertical,
-            20,
-            2,
             vec![
-                Element::text("label", 20, self.label, Style::default()),
-                Element::text("value", 20, self.count.to_string(), Style::default()),
+                Element::text("label", self.label).width(20),
+                Element::text("value", self.count.to_string()).width(20),
             ],
         )
+        .width(20)
+        .height(2)
     }
 }
 
@@ -79,10 +78,10 @@ impl Component for Dashboard {
         Element::container(
             "dashboard",
             Layout::Horizontal,
-            40,
-            2,
             vec![self.left.render(), self.right.render()],
         )
+        .width(40)
+        .height(2)
     }
 }
 

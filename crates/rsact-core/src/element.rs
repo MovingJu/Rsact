@@ -77,31 +77,54 @@ pub struct Element {
 }
 
 impl Element {
-    pub fn text(key: impl Into<Key>, width: u16, content: impl Into<String>, style: Style) -> Self {
+    /// A single-line text leaf. `width`/`height` default to `0`/`1`; chain
+    /// `.width(..)` and `.style(..)` to set them — see the builder methods
+    /// below.
+    pub fn text(key: impl Into<Key>, content: impl Into<String>) -> Self {
         Self {
             key: key.into(),
-            width,
+            width: 0,
             height: 1,
             kind: ElementKind::Text(Text {
                 content: content.into(),
-                style,
+                style: Style::default(),
             }),
         }
     }
 
-    pub fn container(
-        key: impl Into<Key>,
-        layout: Layout,
-        width: u16,
-        height: u16,
-        children: Vec<Element>,
-    ) -> Self {
+    /// A container stacking `children` along `layout`'s axis. `width`/
+    /// `height` default to `0`; chain `.width(..)`/`.height(..)` to size it
+    /// for its own parent's layout.
+    pub fn container(key: impl Into<Key>, layout: Layout, children: Vec<Element>) -> Self {
         Self {
             key: key.into(),
-            width,
-            height,
+            width: 0,
+            height: 0,
             kind: ElementKind::Container { layout, children },
         }
+    }
+
+    /// Sets the extent this element asks its parent for along the parent's
+    /// stack axis (see `layout_children`).
+    pub fn width(mut self, width: u16) -> Self {
+        self.width = width;
+        self
+    }
+
+    /// Sets the extent this element asks its parent for along the parent's
+    /// stack axis (see `layout_children`). For a `Container`, also overrides
+    /// the height children are stacked against on their cross axis.
+    pub fn height(mut self, height: u16) -> Self {
+        self.height = height;
+        self
+    }
+
+    /// Sets the style of a `Text` leaf. A no-op on a `Container`.
+    pub fn style(mut self, style: Style) -> Self {
+        if let ElementKind::Text(text) = &mut self.kind {
+            text.style = style;
+        }
+        self
     }
 }
 
@@ -155,8 +178,10 @@ mod tests {
             height: 10,
         };
         let children = vec![
-            Element::text("a", 5, "a", Style::default()),
-            Element::container("b", Layout::Horizontal, 5, 4, vec![]),
+            Element::text("a", "a").width(5),
+            Element::container("b", Layout::Horizontal, vec![])
+                .width(5)
+                .height(4),
         ];
 
         let rects = layout_children(Layout::Vertical, &children, parent);
@@ -190,8 +215,8 @@ mod tests {
             height: 5,
         };
         let children = vec![
-            Element::text("a", 4, "a", Style::default()),
-            Element::text("b", 6, "b", Style::default()),
+            Element::text("a", "a").width(4),
+            Element::text("b", "b").width(6),
         ];
 
         let rects = layout_children(Layout::Horizontal, &children, parent);
