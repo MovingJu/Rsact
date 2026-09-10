@@ -3,9 +3,9 @@
 
 /* Not yet wired into CMakeLists.txt: examples/c links a *prebuilt*
  * rsact-ffi release binary (see CMakeLists.txt's RSACT_VERSION), and the
- * rsact_element_ and rsact_tree_ functions this file uses were only added
- * after the last tagged release. Add an executable target for this file
- * once RSACT_VERSION points at a release that ships them. */
+ * rsact_element_ and rsact_tree_present functions this file uses were only
+ * added after the last tagged release. Add an executable target for this
+ * file once RSACT_VERSION points at a release that ships them. */
 
 /* Builds one label/count counter as a small vertical container, its two
  * text children built inline as a C99 compound-literal array — one nested
@@ -33,12 +33,14 @@ static RsactElement *dashboard_element(const char *left_value, const char *right
 }
 
 /* Builds a small two-counter dashboard purely through the rsact_element_
- * and rsact_tree_ API, rebuilding the element tree each frame and
- * advancing only the left counter's count. */
+ * and rsact_tree_present API, on the same handle rsact_create/
+ * rsact_destroy already give you — there's no separate handle type for
+ * the component tree. Rebuilds the element tree each frame, advancing
+ * only the left counter's count. */
 int main(void) {
-    RsactTreeHandle *h = rsact_tree_create(40, 2);
+    RsactHandle *h = rsact_create(40, 2);
     if (!h) {
-        fprintf(stderr, "rsact_tree_create failed (not a real terminal?)\n");
+        fprintf(stderr, "rsact_create failed (not a real terminal?)\n");
         return 1;
     }
 
@@ -47,16 +49,12 @@ int main(void) {
         snprintf(left_value, sizeof(left_value), "%u", frame);
 
         RsactElement *root = dashboard_element(left_value, "42");
-        if (rsact_tree_set_root(h, root) != 0) {
-            fprintf(stderr, "rsact_tree_set_root failed\n");
-            break;
-        }
-        if (rsact_tree_present(h) != 0) {
+        if (rsact_tree_present(h, root) != 0) {
             fprintf(stderr, "rsact_tree_present failed\n");
             break;
         }
     }
 
-    rsact_tree_destroy(h); /* also restores the terminal */
+    rsact_destroy(h); /* also restores the terminal */
     return 0;
 }

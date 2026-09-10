@@ -22,6 +22,13 @@ struct RsactHandleInner {
     real_dom: Buffer,
     renderer: Renderer<std::io::Stdout>,
     reader: InputReader<std::io::Stdin>,
+    // Lazily created on the first `rsact_tree_present` call, sized to
+    // `virtual_dom`'s dimensions. Independent of `virtual_dom`/`real_dom`
+    // above — don't call `rsact_set_cell`/`rsact_render` and
+    // `rsact_tree_present` on the same handle, since each tracks its own
+    // "what's actually on screen" baseline and would go stale relative to
+    // whatever the other one last drew.
+    tree: Option<Tree<FfiComponent>>,
 }
 
 /// # Safety
@@ -71,6 +78,7 @@ pub unsafe extern "C" fn rsact_create(width: u16, height: u16) -> *mut RsactHand
         real_dom: Buffer::new(terminal_size.col, terminal_size.row),
         renderer: Renderer::new(std::io::stdout()),
         reader: InputReader::new(std::io::stdin()),
+        tree: None,
     });
     Box::into_raw(handle_inner) as *mut RsactHandle
 }
@@ -334,15 +342,15 @@ impl RsactKeyEvent {
 //
 // C has no equivalent of the `Component` trait, so instead of rendering a
 // tree from Rust state each frame, a C caller builds an `Element` tree
-// directly with the functions below and hands the finished root over to a
-// `RsactTreeHandle` each frame via `rsact_tree_set_root`. Internally this
-// wraps the built `Element` in a trivial `Component` (`FfiComponent`) whose
-// `render` just clones it, so it can drive the same `Tree` reconciler
-// Rust callers use.
+// directly with the functions below and hands the finished root over to
+// the same `RsactHandle` each frame via `rsact_tree_present`. Internally
+// this wraps the built `Element` in a trivial `Component` (`FfiComponent`)
+// whose `render` just clones it, so it can drive the same `Tree`
+// reconciler Rust callers use.
 
 /// An opaque, owned `Element` (sub)tree, built up with the
 /// `rsact_element_*` functions below. Passing one to `rsact_element_container`
-/// (as one of its `children`) or `rsact_tree_set_root` transfers ownership —
+/// (as one of its `children`) or `rsact_tree_present` transfers ownership —
 /// never touch or free it again afterward. An `Element` you built but never
 /// attached anywhere must be freed with `rsact_element_free`.
 #[repr(C)]
@@ -509,13 +517,13 @@ pub unsafe extern "C" fn rsact_element_container(
 }
 
 /// Frees an element (sub)tree that was never attached to a
-/// `rsact_element_container` call or `rsact_tree_set_root`. Does nothing if
+/// `rsact_element_container` call or `rsact_tree_present`. Does nothing if
 /// `elem` is null.
 ///
 /// # Safety
 /// `elem` must be either null or a valid pointer returned by
 /// `rsact_element_text`/`rsact_element_container` that hasn't already been
-/// passed as a child to `rsact_element_container`, to `rsact_tree_set_root`,
+/// passed as a child to `rsact_element_container`, to `rsact_tree_present`,
 /// or to `rsact_element_free`. Never call this twice on the same pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rsact_element_free(elem: *mut RsactElement) {
@@ -525,7 +533,7 @@ pub unsafe extern "C" fn rsact_element_free(elem: *mut RsactElement) {
     drop(unsafe { Box::from_raw(elem as *mut Element) });
 }
 
-/// Wraps a caller-built `Element` so it can stand in as the `Tree`'s root
+/// Wraps a caller-built `Element` so it can stand in as a `Tree`'s root
 /// `Component` — `render` just clones the currently-set tree.
 struct FfiComponent {
     element: Element,
@@ -537,88 +545,28 @@ impl Component for FfiComponent {
     }
 }
 
-/// An opaque handle owning a `Tree`, its own raw-mode guard, renderer, and
-/// input reader — the component-tree equivalent of `RsactHandle`.
-#[repr(C)]
-pub struct RsactTreeHandle {
-    _private: [u8; 0],
-}
-
-struct RsactTreeHandleInner {
-    _rmg: RawModeGuard,
-    tree: Tree<FfiComponent>,
-    renderer: Renderer<std::io::Stdout>,
-    reader: InputReader<std::io::Stdin>,
-}
-
-/// # Safety
-/// Same constraints as `get_handle`, with `RsactTreeHandle` in place of
-/// `RsactHandle`.
-unsafe fn get_tree_handle<'a>(
-    handle: *mut RsactTreeHandle,
-) -> Option<&'a mut RsactTreeHandleInner> {
-    if handle.is_null() {
-        None
-    } else {
-        Some(unsafe { &mut *(handle as *mut RsactTreeHandleInner) })
-    }
-}
-
-/// Creates a handle for a `width`×`height` component tree and enters raw
-/// mode. The tree starts with an empty root container — set real content
-/// with `rsact_tree_set_root` before the first `rsact_tree_present`.
-/// Returns a null pointer if raw mode couldn't be enabled (for example,
-/// when stdin/stdout isn't a real terminal).
+/// Renders `element` (taking ownership of it) through the component-tree
+/// reconciler and draws only what changed, on the same `RsactHandle`
+/// `rsact_create` already gave you — there's no separate handle type or
+/// create/destroy call for the component tree. The `Tree` behind this is
+/// created on the first call, sized to match the handle's `width`/`height`;
+/// every later call reconciles against what the previous call drew.
 ///
-/// # Safety
-/// Same as `rsact_create`.
+/// Don't also call `rsact_set_cell`/`rsact_render` on a handle you use this
+/// way: each API tracks its own independent "what's actually on screen"
+/// baseline, and interleaving them will leave one of those baselines stale,
+/// causing incorrect (missing) repaints. Pick one API per handle.
 ///
-/// # Examples
-/// ```rust,no_run
-/// use rsact_ffi::*;
-///
-/// unsafe {
-///     let handle = rsact_tree_create(40, 2);
-///     assert!(!handle.is_null());
-///     rsact_tree_destroy(handle);
-/// }
-/// ```
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rsact_tree_create(width: u16, height: u16) -> *mut RsactTreeHandle {
-    let terminal_size = TerminalSize {
-        row: height,
-        col: width,
-    };
-    let rmg = match RawModeGuard::enable_safe_exit(terminal_size, std::io::stdout()) {
-        Ok(rmg) => rmg,
-        Err(_) => return std::ptr::null_mut(),
-    };
-    let root = FfiComponent {
-        element: Element::container("root", Layout::Vertical, Vec::new())
-            .width(width)
-            .height(height),
-    };
-    let handle_inner = Box::new(RsactTreeHandleInner {
-        _rmg: rmg,
-        tree: Tree::new(root, width, height),
-        renderer: Renderer::new(std::io::stdout()),
-        reader: InputReader::new(std::io::stdin()),
-    });
-    Box::into_raw(handle_inner) as *mut RsactTreeHandle
-}
-
-/// Replaces `handle`'s tree root with `element`, taking ownership of it —
-/// never use or free `element` again after this call. Takes effect on the
-/// next `rsact_tree_present`. Returns `0` on success, `-1` if `handle` is
-/// null, `-2` if `element` is null.
+/// Returns `0` on success, `-1` if `handle`/`element` is null or the write
+/// failed.
 ///
 /// # Safety
 /// `handle` must be either null or a valid pointer returned by
-/// `rsact_tree_create` that hasn't been passed to `rsact_tree_destroy` yet.
-/// `element` must be either null or a valid pointer returned by
+/// `rsact_create` that hasn't been passed to `rsact_destroy` yet. `element`
+/// must be either null or a valid pointer returned by
 /// `rsact_element_text`/`rsact_element_container` that hasn't yet been
-/// passed as a child to `rsact_element_container`, to
-/// `rsact_tree_set_root`, or to `rsact_element_free`.
+/// passed as a child to `rsact_element_container`, to another
+/// `rsact_tree_present` call, or to `rsact_element_free`.
 ///
 /// # Examples
 /// ```rust,no_run
@@ -626,114 +574,39 @@ pub unsafe extern "C" fn rsact_tree_create(width: u16, height: u16) -> *mut Rsac
 /// use std::ffi::CString;
 ///
 /// unsafe {
-///     let handle = rsact_tree_create(20, 1);
+///     let handle = rsact_create(20, 1);
 ///     let key = CString::new("greeting").unwrap();
 ///     let content = CString::new("hi").unwrap();
 ///     let root = rsact_element_text(key.as_ptr(), content.as_ptr(), 10, 0xffffff, 0, 0);
-///     assert_eq!(rsact_tree_set_root(handle, root), 0);
-///     assert_eq!(rsact_tree_present(handle), 0);
-///     rsact_tree_destroy(handle);
+///     assert_eq!(rsact_tree_present(handle, root), 0);
+///     rsact_destroy(handle);
 /// }
 /// ```
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rsact_tree_set_root(
-    handle: *mut RsactTreeHandle,
+pub unsafe extern "C" fn rsact_tree_present(
+    handle: *mut RsactHandle,
     element: *mut RsactElement,
 ) -> i32 {
     if element.is_null() {
-        return -2;
+        return -1;
     }
     let element = *unsafe { Box::from_raw(element as *mut Element) };
-    let Some(handle) = (unsafe { get_tree_handle(handle) }) else {
+    let Some(handle) = (unsafe { get_handle(handle) }) else {
         return -1;
     };
-    handle.tree.root_mut().element = element;
-    0
-}
 
-/// Renders the current root, reconciles it against the previous frame,
-/// diffs the result against what's actually on screen, and draws only that
-/// patch set in a single write — see `Tree::present` in `rsact-core`.
-/// Returns `0` on success, `-1` if `handle` is null or the write failed.
-///
-/// # Safety
-/// `handle` must be either null or a valid pointer returned by
-/// `rsact_tree_create` that hasn't been passed to `rsact_tree_destroy` yet.
-///
-/// # Examples
-/// ```rust,no_run
-/// use rsact_ffi::*;
-///
-/// unsafe {
-///     let handle = rsact_tree_create(20, 1);
-///     let rc = rsact_tree_present(handle);
-///     assert_eq!(rc, 0);
-///     rsact_tree_destroy(handle);
-/// }
-/// ```
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rsact_tree_present(handle: *mut RsactTreeHandle) -> i32 {
-    let Some(handle) = (unsafe { get_tree_handle(handle) }) else {
-        return -1;
-    };
-    match handle.tree.present(&mut handle.renderer) {
+    let width = handle.virtual_dom.width();
+    let height = handle.virtual_dom.height();
+    let RsactHandleInner { tree, renderer, .. } = handle;
+    let tree = tree.get_or_insert_with(|| {
+        let root = FfiComponent {
+            element: Element::container("root", Layout::Vertical, Vec::new()),
+        };
+        Tree::new(root, width, height)
+    });
+    tree.root_mut().element = element;
+    match tree.present(renderer) {
         Ok(_) => 0,
         Err(_) => -1,
     }
-}
-
-/// Reads and decodes the next key from stdin into `out_event`, identical to
-/// `rsact_poll_key` but for a `RsactTreeHandle`. Blocks until a key
-/// arrives. Returns `1` and fills `out_event` when a key was read, `0` on
-/// EOF, `-1`/`-2` on a null handle/read error.
-///
-/// # Safety
-/// Same as `rsact_poll_key`, with `RsactTreeHandle` in place of
-/// `RsactHandle`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rsact_tree_poll_key(
-    handle: *mut RsactTreeHandle,
-    out_event: *mut RsactKeyEvent,
-) -> i32 {
-    let Some(handle) = (unsafe { get_tree_handle(handle) }) else {
-        return -1;
-    };
-    let key = match handle.reader.read_key() {
-        Ok(key) => key,
-        Err(_) => return -2,
-    };
-    let key = match key {
-        Some(val) => val,
-        None => return 0, // EOF
-    };
-    unsafe {
-        *out_event = key_to_struct(key);
-    }
-    1
-}
-
-/// Destroys a handle created by `rsact_tree_create`, restoring the
-/// terminal. Does nothing if `handle` is null.
-///
-/// # Safety
-/// `handle` must be either null or a pointer previously returned by
-/// `rsact_tree_create` that hasn't already been passed to
-/// `rsact_tree_destroy`. Never call this twice on the same pointer, and
-/// never use `handle` again afterward.
-///
-/// # Examples
-/// ```rust,no_run
-/// use rsact_ffi::*;
-///
-/// unsafe {
-///     let handle = rsact_tree_create(20, 1);
-///     rsact_tree_destroy(handle);
-/// }
-/// ```
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rsact_tree_destroy(handle: *mut RsactTreeHandle) {
-    if handle.is_null() {
-        return;
-    }
-    drop(unsafe { Box::from_raw(handle as *mut RsactTreeHandleInner) });
 }
