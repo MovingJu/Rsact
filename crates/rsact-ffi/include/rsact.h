@@ -34,6 +34,14 @@
  */
 #define RSACT_LAYOUT_HORIZONTAL 1
 
+/**
+ * An opaque handle for the flat-buffer API (`rsact_set_cell`/
+ * `rsact_render`). A distinct type from `RsactTreeHandle` on purpose: the
+ * two APIs each track their own independent "what's actually on screen"
+ * baseline, so a handle from one can't be passed to the other's
+ * functions — the C compiler rejects that as an incompatible pointer type
+ * instead of it silently producing incorrect repaints at runtime.
+ */
 typedef struct RsactHandle {
   uint8_t _private[0];
 } RsactHandle;
@@ -53,6 +61,14 @@ typedef struct RsactKeyEvent {
 typedef struct RsactElement {
   uint8_t _private[0];
 } RsactElement;
+
+/**
+ * An opaque handle for the component-tree API (`rsact_tree_present`). A
+ * distinct type from `RsactHandle` on purpose — see `RsactHandle`'s docs.
+ */
+typedef struct RsactTreeHandle {
+  uint8_t _private[0];
+} RsactTreeHandle;
 
 /**
  * Creates a handle for a `width`×`height` virtual terminal buffer and
@@ -306,25 +322,40 @@ struct RsactElement *rsact_element_container(const char *key,
 void rsact_element_free(struct RsactElement *elem);
 
 /**
- * Renders `element` (taking ownership of it) through the component-tree
- * reconciler and draws only what changed, on the same `RsactHandle`
- * `rsact_create` already gave you — there's no separate handle type or
- * create/destroy call for the component tree. The `Tree` behind this is
- * created on the first call, sized to match the handle's `width`/`height`;
- * every later call reconciles against what the previous call drew.
+ * Creates a handle for a `width`×`height` component tree and enters raw
+ * mode. The tree starts with an empty root container — give it real
+ * content with the first `rsact_tree_present` call. Returns a null
+ * pointer if raw mode couldn't be enabled (for example, when
+ * stdin/stdout isn't a real terminal).
  *
- * Don't also call `rsact_set_cell`/`rsact_render` on a handle you use this
- * way: each API tracks its own independent "what's actually on screen"
- * baseline, and interleaving them will leave one of those baselines stale,
- * causing incorrect (missing) repaints. Pick one API per handle.
+ * # Safety
+ * Same as `rsact_create`.
  *
- * Returns `0` on success, `-1` if `handle`/`element` is null or the write
- * failed.
+ * # Examples
+ * ```rust,no_run
+ * use rsact_ffi::*;
+ *
+ * unsafe {
+ *     let handle = rsact_tree_create(40, 2);
+ *     assert!(!handle.is_null());
+ *     rsact_tree_destroy(handle);
+ * }
+ * ```
+ */
+struct RsactTreeHandle *rsact_tree_create(uint16_t width, uint16_t height);
+
+/**
+ * Replaces `handle`'s tree root with `element` (taking ownership of it —
+ * never use or free `element` again after this call), reconciles it
+ * against the previous frame, diffs the result against what's actually on
+ * screen, and draws only that patch set in a single write — see
+ * `Tree::present` in `rsact-core`. Returns `0` on success, `-1` if
+ * `handle` is null or the write failed, `-2` if `element` is null.
  *
  * # Safety
  * `handle` must be either null or a valid pointer returned by
- * `rsact_create` that hasn't been passed to `rsact_destroy` yet. `element`
- * must be either null or a valid pointer returned by
+ * `rsact_tree_create` that hasn't been passed to `rsact_tree_destroy` yet.
+ * `element` must be either null or a valid pointer returned by
  * `rsact_element_text`/`rsact_element_container` that hasn't yet been
  * passed as a child to `rsact_element_container`, to another
  * `rsact_tree_present` call, or to `rsact_element_free`.
@@ -335,13 +366,47 @@ void rsact_element_free(struct RsactElement *elem);
  * use std::ffi::CString;
  *
  * unsafe {
- *     let handle = rsact_create(20, 1);
+ *     let handle = rsact_tree_create(20, 1);
  *     let key = CString::new("greeting").unwrap();
  *     let content = CString::new("hi").unwrap();
  *     let root = rsact_element_text(key.as_ptr(), content.as_ptr(), 10, 0xffffff, 0, 0);
  *     assert_eq!(rsact_tree_present(handle, root), 0);
- *     rsact_destroy(handle);
+ *     rsact_tree_destroy(handle);
  * }
  * ```
  */
-int32_t rsact_tree_present(struct RsactHandle *handle, struct RsactElement *element);
+int32_t rsact_tree_present(struct RsactTreeHandle *handle, struct RsactElement *element);
+
+/**
+ * Reads and decodes the next key from stdin into `out_event`, identical to
+ * `rsact_poll_key` but for a `RsactTreeHandle`. Blocks until a key
+ * arrives. Returns `1` and fills `out_event` when a key was read, `0` on
+ * EOF, `-1`/`-2` on a null handle/read error.
+ *
+ * # Safety
+ * Same as `rsact_poll_key`, with `RsactTreeHandle` in place of
+ * `RsactHandle`.
+ */
+int32_t rsact_tree_poll_key(struct RsactTreeHandle *handle, struct RsactKeyEvent *out_event);
+
+/**
+ * Destroys a handle created by `rsact_tree_create`, restoring the
+ * terminal. Does nothing if `handle` is null.
+ *
+ * # Safety
+ * `handle` must be either null or a pointer previously returned by
+ * `rsact_tree_create` that hasn't already been passed to
+ * `rsact_tree_destroy`. Never call this twice on the same pointer, and
+ * never use `handle` again afterward.
+ *
+ * # Examples
+ * ```rust,no_run
+ * use rsact_ffi::*;
+ *
+ * unsafe {
+ *     let handle = rsact_tree_create(20, 1);
+ *     rsact_tree_destroy(handle);
+ * }
+ * ```
+ */
+void rsact_tree_destroy(struct RsactTreeHandle *handle);

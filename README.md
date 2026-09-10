@@ -38,7 +38,7 @@ This repository is a Cargo workspace with three crates:
 |---|---|---|
 | [`rsact-core`](https://github.com/MovingJu/Rsact/tree/main/crates/rsact-core) | lib | The virtual terminal buffer, diffing, renderer, raw mode, and input parser. The heart of the project |
 | [`rsact-demo`](https://github.com/MovingJu/Rsact/tree/main/crates/rsact-demo) | bin (`publish = false`) | An example built on `rsact-core` alone — animates a growing rectangle |
-| [`rsact-ffi`](https://github.com/MovingJu/Rsact/tree/main/crates/rsact-ffi) | cdylib/staticlib/lib | A C ABI wrapper around `rsact-core`: one handle from `rsact_create`, driven either as a flat buffer (`rsact_set_cell`/`rsact_render`) or as a component tree (`rsact_element_*`/`rsact_tree_present`), plus a `cbindgen`-generated header |
+| [`rsact-ffi`](https://github.com/MovingJu/Rsact/tree/main/crates/rsact-ffi) | cdylib/staticlib/lib | A C ABI wrapper around `rsact-core`: a `rsact_create` handle for the flat buffer (`rsact_set_cell`/`rsact_render`) and a distinct `rsact_tree_create` handle for the component tree (`rsact_element_*`/`rsact_tree_*`) — separate types on purpose, so the C compiler rejects passing one where the other is expected — plus a `cbindgen`-generated header |
 
 ```text
 Rsact/

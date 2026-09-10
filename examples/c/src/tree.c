@@ -3,9 +3,9 @@
 
 /* Not yet wired into CMakeLists.txt: examples/c links a *prebuilt*
  * rsact-ffi release binary (see CMakeLists.txt's RSACT_VERSION), and the
- * rsact_element_ and rsact_tree_present functions this file uses were only
- * added after the last tagged release. Add an executable target for this
- * file once RSACT_VERSION points at a release that ships them. */
+ * rsact_element_ and rsact_tree_ functions this file uses were only added
+ * after the last tagged release. Add an executable target for this file
+ * once RSACT_VERSION points at a release that ships them. */
 
 /* Builds one label/count counter as a small vertical container, its two
  * text children built inline as a C99 compound-literal array — one nested
@@ -33,14 +33,16 @@ static RsactElement *dashboard_element(const char *left_value, const char *right
 }
 
 /* Builds a small two-counter dashboard purely through the rsact_element_
- * and rsact_tree_present API, on the same handle rsact_create/
- * rsact_destroy already give you — there's no separate handle type for
- * the component tree. Rebuilds the element tree each frame, advancing
+ * and rsact_tree_ API. RsactTreeHandle is a distinct type from RsactHandle
+ * on purpose: it can't be passed to rsact_set_cell/rsact_render by
+ * accident, since those take a RsactHandle and this is a RsactTreeHandle —
+ * the compiler catches that, rather than it silently corrupting a diff
+ * baseline at runtime. Rebuilds the element tree each frame, advancing
  * only the left counter's count. */
 int main(void) {
-    RsactHandle *h = rsact_create(40, 2);
+    RsactTreeHandle *h = rsact_tree_create(40, 2);
     if (!h) {
-        fprintf(stderr, "rsact_create failed (not a real terminal?)\n");
+        fprintf(stderr, "rsact_tree_create failed (not a real terminal?)\n");
         return 1;
     }
 
@@ -55,6 +57,6 @@ int main(void) {
         }
     }
 
-    rsact_destroy(h); /* also restores the terminal */
+    rsact_tree_destroy(h); /* also restores the terminal */
     return 0;
 }

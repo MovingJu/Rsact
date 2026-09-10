@@ -1,9 +1,9 @@
 //! Builds a small two-counter dashboard purely through the C-style
-//! `rsact_element_*`/`rsact_tree_present` API on a plain `rsact_create`
-//! handle — this is what a C caller does, since there's no `Component`
-//! trait to implement on that side. The whole tree is built as one nested
-//! expression per frame, HTML-like, instead of naming every child as a
-//! separate variable and wiring it in with a setter call.
+//! `rsact_element_*`/`rsact_tree_*` API — this is what a C caller does,
+//! since there's no `Component` trait to implement on that side. The whole
+//! tree is built as one nested expression per frame, HTML-like, instead of
+//! naming every child as a separate variable and wiring it in with a
+//! setter call.
 //!
 //! Run with: `cargo run --example tree -p rsact-ffi`
 
@@ -69,10 +69,10 @@ fn dashboard_element(left_count: u32, right_count: u32) -> *mut RsactElement {
 
 fn main() {
     unsafe {
-        let handle = rsact_create(40, 2);
+        let handle = rsact_tree_create(40, 2);
         assert!(
             !handle.is_null(),
-            "rsact_create failed (not a real terminal?)"
+            "rsact_tree_create failed (not a real terminal?)"
         );
 
         for frame in 0..5u32 {
@@ -81,6 +81,6 @@ fn main() {
             std::thread::sleep(std::time::Duration::from_millis(500));
         }
 
-        rsact_destroy(handle);
+        rsact_tree_destroy(handle);
     }
 }
