@@ -29,7 +29,7 @@ You draw the state you want into a virtual buffer — a grid of cells, each a ch
 - **Cursor restored on exit** — `RawModeGuard::enable_safe_exit` moves the cursor to the terminal's last row/col and emits a trailing newline on `Drop`, so the shell prompt doesn't land on top of the last frame ([#4](https://github.com/MovingJu/Rsact/issues/4), fixed in [#5](https://github.com/MovingJu/Rsact/pull/5))
 - **UTF-8-aware input parser** — arrow keys, Ctrl+letter, Backspace/Enter/Esc, and multi-byte UTF-8 characters (Korean syllables, emoji) all decode correctly from a single `read_key()` call
 - **Auto-generated C header** — `rsact-ffi`'s `build.rs` regenerates `include/rsact.h` via `cbindgen` on every build
-- **Declarative component tree** ([v0.2.0](https://github.com/MovingJu/Rsact/issues/2)) — describe the screen as a tree of `Component`s instead of hand-writing `set_cell` calls; `Tree` reconciles consecutive frames by `Key` and repaints only what changed. See [`docs/component-tree.md`](docs/component-tree.md) and the [Component tree](#component-tree) section below.
+- **Declarative component tree** ([v0.2.0](https://github.com/MovingJu/Rsact/issues/2)) — describe the screen as a tree of `Component`s instead of hand-writing `set_cell` calls; `Tree` reconciles consecutive frames by `Key` and repaints only what changed. See the [Component tree](#component-tree) section below.
 
 ## Crate layout
 
@@ -50,7 +50,6 @@ Rsact/
 │   ├── rsact-demo/        # rsact-core-only demo (animated rectangle + a Dashboard/Counter component tree)
 │   └── rsact-ffi/         # C ABI; build.rs generates include/rsact.h via cbindgen
 ├── examples/c/             # 3 C examples (src/) linking a prebuilt rsact-ffi release via CMake FetchContent
-├── docs/                   # component-tree.md — component tree concepts, diagrams, and a full example
 ├── .github/workflows/      # PR title & commit message convention checks
 ├── CONTRIBUTING.md
 └── LICENSE (MIT)
@@ -228,7 +227,9 @@ Tree::present(&mut renderer)  diff(on_screen, buffer) → Patch runs (v0.1 pipel
 on_screen = buffer.clone()    commit as the baseline for the next frame
 ```
 
-See [`docs/component-tree.md`](docs/component-tree.md) for the full concepts walkthrough (`Element`, `Key`, `Layout`, `Component`, `Tree`), a diagram of a nested tree, and this milestone's current limitations.
+Current limitations, intentional for v0.2.0 (see [#2](https://github.com/MovingJu/Rsact/issues/2)'s non-goals): no flexbox-style layout (each child just declares a fixed width/height along its parent's stack axis), `Text` is single-line only, no built-in widget set beyond `Text`/`Container` yet, and everything still runs single-threaded and synchronously (opt-in multithreading is [v0.3.0](https://github.com/MovingJu/Rsact/issues/3)'s job).
+
+A deeper concepts walkthrough with a nested-tree diagram lives on the [wiki](https://github.com/MovingJu/Rsact/wiki).
 
 ## Examples
 
