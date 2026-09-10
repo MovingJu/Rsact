@@ -32,6 +32,25 @@ typedef struct RsactKeyEvent {
 } RsactKeyEvent;
 
 /**
+ * An opaque, owned `Element` (sub)tree, built up with the
+ * `rsact_element_*` functions below. Passing one to
+ * `rsact_element_add_child` or `rsact_tree_set_root` transfers ownership —
+ * never touch or free it again afterward. An `Element` you built but never
+ * attached anywhere must be freed with `rsact_element_free`.
+ */
+typedef struct RsactElement {
+  uint8_t _private[0];
+} RsactElement;
+
+/**
+ * An opaque handle owning a `Tree`, its own raw-mode guard, renderer, and
+ * input reader — the component-tree equivalent of `RsactHandle`.
+ */
+typedef struct RsactTreeHandle {
+  uint8_t _private[0];
+} RsactTreeHandle;
+
+/**
  * Creates a handle for a `width`×`height` virtual terminal buffer and
  * enters raw mode. Returns a null pointer if raw mode couldn't be enabled
  * (for example, when stdin/stdout isn't a real terminal).
@@ -180,3 +199,246 @@ int32_t rsact_render(struct RsactHandle *handle);
  * ```
  */
 int32_t rsact_poll_key(struct RsactHandle *handle, struct RsactKeyEvent *out_event);
+
+/**
+ * Creates a single-line text leaf element, width/height defaulting to
+ * `0`/`1` (set width with `rsact_element_set_width`). Returns null if
+ * `key` or `content` is null or not valid UTF-8.
+ *
+ * # Safety
+ * `key` and `content` must each be either null or a valid, NUL-terminated,
+ * UTF-8 C string.
+ *
+ * # Examples
+ * ```rust,no_run
+ * use rsact_ffi::*;
+ * use std::ffi::CString;
+ *
+ * unsafe {
+ *     let key = CString::new("label").unwrap();
+ *     let content = CString::new("hello").unwrap();
+ *     let elem = rsact_element_text(key.as_ptr(), content.as_ptr());
+ *     assert!(!elem.is_null());
+ *     rsact_element_free(elem);
+ * }
+ * ```
+ */
+struct RsactElement *rsact_element_text(const char *key, const char *content);
+
+/**
+ * Creates a container element with no children yet (add them with
+ * `rsact_element_add_child`); width/height default to `0`.
+ * `layout` is `0` for `Vertical`, `1` for `Horizontal`. Returns null if
+ * `key` is null/not valid UTF-8, or `layout` isn't `0`/`1`.
+ *
+ * # Safety
+ * `key` must be either null or a valid, NUL-terminated, UTF-8 C string.
+ *
+ * # Examples
+ * ```rust,no_run
+ * use rsact_ffi::*;
+ * use std::ffi::CString;
+ *
+ * unsafe {
+ *     let key = CString::new("root").unwrap();
+ *     let elem = rsact_element_container(key.as_ptr(), 0);
+ *     assert!(!elem.is_null());
+ *     rsact_element_free(elem);
+ * }
+ * ```
+ */
+struct RsactElement *rsact_element_container(const char *key, uint8_t layout);
+
+/**
+ * Sets the extent `elem` asks its parent for along the parent's stack
+ * axis. Returns `0` on success, `-1` if `elem` is null.
+ *
+ * # Safety
+ * `elem` must be a valid pointer returned by `rsact_element_text`/
+ * `rsact_element_container` that hasn't yet been passed to
+ * `rsact_element_add_child`, `rsact_tree_set_root`, or
+ * `rsact_element_free`.
+ */
+int32_t rsact_element_set_width(struct RsactElement *elem, uint16_t width);
+
+/**
+ * Sets the extent `elem` asks its parent for along the parent's stack
+ * axis. Returns `0` on success, `-1` if `elem` is null.
+ *
+ * # Safety
+ * Same as `rsact_element_set_width`.
+ */
+int32_t rsact_element_set_height(struct RsactElement *elem, uint16_t height);
+
+/**
+ * Sets the style of a `Text` leaf; same `fg_rgb`/`bg_rgb`/`attrs` encoding
+ * as `rsact_set_cell`. Returns `0` on success, `-1` if `elem` is null,
+ * `-2` if `elem` is a container (styling is a no-op there), `-3` if
+ * `attrs` isn't one of the recognized sums.
+ *
+ * # Safety
+ * Same as `rsact_element_set_width`.
+ */
+int32_t rsact_element_set_style(struct RsactElement *elem,
+                                uint32_t fg_rgb,
+                                uint32_t bg_rgb,
+                                uint8_t attrs);
+
+/**
+ * Appends `child` as the last child of `container`. Always consumes
+ * `child` — never use or free it again after this call, whether or not it
+ * succeeds. Returns `0` on success, `-1` if `container` or `child` is
+ * null, `-2` if `container` is a `Text` leaf (it can't have children).
+ *
+ * # Safety
+ * `container` and `child` must each be either null or a valid pointer
+ * returned by `rsact_element_text`/`rsact_element_container` that hasn't
+ * yet been passed to `rsact_element_add_child`, `rsact_tree_set_root`, or
+ * `rsact_element_free`. `container` and `child` must not be the same
+ * pointer.
+ *
+ * # Examples
+ * ```rust,no_run
+ * use rsact_ffi::*;
+ * use std::ffi::CString;
+ *
+ * unsafe {
+ *     let root_key = CString::new("root").unwrap();
+ *     let root = rsact_element_container(root_key.as_ptr(), 0);
+ *
+ *     let child_key = CString::new("child").unwrap();
+ *     let child_content = CString::new("hi").unwrap();
+ *     let child = rsact_element_text(child_key.as_ptr(), child_content.as_ptr());
+ *
+ *     assert_eq!(rsact_element_add_child(root, child), 0);
+ *     rsact_element_free(root); // also frees the attached child
+ * }
+ * ```
+ */
+int32_t rsact_element_add_child(struct RsactElement *container, struct RsactElement *child);
+
+/**
+ * Frees an element (sub)tree that was never attached via
+ * `rsact_element_add_child` or `rsact_tree_set_root`. Does nothing if
+ * `elem` is null.
+ *
+ * # Safety
+ * `elem` must be either null or a valid pointer returned by
+ * `rsact_element_text`/`rsact_element_container` that hasn't already been
+ * passed to `rsact_element_add_child`, `rsact_tree_set_root`, or
+ * `rsact_element_free`. Never call this twice on the same pointer.
+ */
+void rsact_element_free(struct RsactElement *elem);
+
+/**
+ * Creates a handle for a `width`×`height` component tree and enters raw
+ * mode. The tree starts with an empty root container — set real content
+ * with `rsact_tree_set_root` before the first `rsact_tree_present`.
+ * Returns a null pointer if raw mode couldn't be enabled (for example,
+ * when stdin/stdout isn't a real terminal).
+ *
+ * # Safety
+ * Same as `rsact_create`.
+ *
+ * # Examples
+ * ```rust,no_run
+ * use rsact_ffi::*;
+ *
+ * unsafe {
+ *     let handle = rsact_tree_create(40, 2);
+ *     assert!(!handle.is_null());
+ *     rsact_tree_destroy(handle);
+ * }
+ * ```
+ */
+struct RsactTreeHandle *rsact_tree_create(uint16_t width, uint16_t height);
+
+/**
+ * Replaces `handle`'s tree root with `element`, taking ownership of it —
+ * never use or free `element` again after this call. Takes effect on the
+ * next `rsact_tree_present`. Returns `0` on success, `-1` if `handle` is
+ * null, `-2` if `element` is null.
+ *
+ * # Safety
+ * `handle` must be either null or a valid pointer returned by
+ * `rsact_tree_create` that hasn't been passed to `rsact_tree_destroy` yet.
+ * `element` must be either null or a valid pointer returned by
+ * `rsact_element_text`/`rsact_element_container` that hasn't yet been
+ * passed to `rsact_element_add_child`, `rsact_tree_set_root`, or
+ * `rsact_element_free`.
+ *
+ * # Examples
+ * ```rust,no_run
+ * use rsact_ffi::*;
+ * use std::ffi::CString;
+ *
+ * unsafe {
+ *     let handle = rsact_tree_create(20, 1);
+ *     let key = CString::new("greeting").unwrap();
+ *     let content = CString::new("hi").unwrap();
+ *     let root = rsact_element_text(key.as_ptr(), content.as_ptr());
+ *     assert_eq!(rsact_tree_set_root(handle, root), 0);
+ *     assert_eq!(rsact_tree_present(handle), 0);
+ *     rsact_tree_destroy(handle);
+ * }
+ * ```
+ */
+int32_t rsact_tree_set_root(struct RsactTreeHandle *handle, struct RsactElement *element);
+
+/**
+ * Renders the current root, reconciles it against the previous frame,
+ * diffs the result against what's actually on screen, and draws only that
+ * patch set in a single write — see `Tree::present` in `rsact-core`.
+ * Returns `0` on success, `-1` if `handle` is null or the write failed.
+ *
+ * # Safety
+ * `handle` must be either null or a valid pointer returned by
+ * `rsact_tree_create` that hasn't been passed to `rsact_tree_destroy` yet.
+ *
+ * # Examples
+ * ```rust,no_run
+ * use rsact_ffi::*;
+ *
+ * unsafe {
+ *     let handle = rsact_tree_create(20, 1);
+ *     let rc = rsact_tree_present(handle);
+ *     assert_eq!(rc, 0);
+ *     rsact_tree_destroy(handle);
+ * }
+ * ```
+ */
+int32_t rsact_tree_present(struct RsactTreeHandle *handle);
+
+/**
+ * Reads and decodes the next key from stdin into `out_event`, identical to
+ * `rsact_poll_key` but for a `RsactTreeHandle`. Blocks until a key
+ * arrives. Returns `1` and fills `out_event` when a key was read, `0` on
+ * EOF, `-1`/`-2` on a null handle/read error.
+ *
+ * # Safety
+ * Same as `rsact_poll_key`, with `RsactTreeHandle` in place of
+ * `RsactHandle`.
+ */
+int32_t rsact_tree_poll_key(struct RsactTreeHandle *handle, struct RsactKeyEvent *out_event);
+
+/**
+ * Destroys a handle created by `rsact_tree_create`, restoring the
+ * terminal. Does nothing if `handle` is null.
+ *
+ * # Safety
+ * `handle` must be either null or a pointer previously returned by
+ * `rsact_tree_create` that hasn't already been passed to
+ * `rsact_tree_destroy`. Never call this twice on the same pointer, and
+ * never use `handle` again afterward.
+ *
+ * # Examples
+ * ```rust,no_run
+ * use rsact_ffi::*;
+ *
+ * unsafe {
+ *     let handle = rsact_tree_create(20, 1);
+ *     rsact_tree_destroy(handle);
+ * }
+ * ```
+ */
+void rsact_tree_destroy(struct RsactTreeHandle *handle);
