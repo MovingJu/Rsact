@@ -177,6 +177,7 @@ Both `rsact-demo` and `rsact-ffi`'s `rsact_render` follow exactly these five ste
 | `cargo run --example animate -p rsact-ffi` | A `#` character moving across row 5 (~16ms/frame) |
 | `cargo run --example tree -p rsact-ffi` | A two-counter `Dashboard`, built purely through the C-style `rsact_element_*`/`rsact_tree_*` API |
 | `examples/c/src/basic.c` · `animate.c` · `input.c` | The same two examples, plus key-input polling, reproduced in plain C against `rsact-ffi`'s header. [`examples/c/CMakeLists.txt`](https://github.com/MovingJu/Rsact/blob/main/examples/c/CMakeLists.txt) builds all three against a prebuilt `rsact-ffi` downloaded from the matching GitHub Release |
+| `examples/c/src/tree.c` | The same `Dashboard` as `examples/tree.rs`, in plain C. Written, and compiles/links/runs against a locally-built `rsact-ffi`, but **not yet wired into `CMakeLists.txt`** — `examples/c` links a prebuilt release binary that predates these functions; it'll be added as a CMake target once a release ships them |
 
 ## Development
 
