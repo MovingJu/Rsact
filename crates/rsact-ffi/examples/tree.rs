@@ -1,7 +1,9 @@
 //! Builds a small two-counter dashboard purely through the C-style
 //! `rsact_element_*`/`rsact_tree_*` API, rebuilding the element tree each
 //! frame — this is what a C caller does, since there's no `Component`
-//! trait to implement on that side.
+//! trait to implement on that side. The whole tree is built as one nested
+//! expression per frame, HTML-like, instead of naming every child as a
+//! separate variable and wiring it in with a setter call.
 //!
 //! Run with: `cargo run --example tree -p rsact-ffi`
 
@@ -12,23 +14,37 @@ use std::ffi::CString;
 fn counter_element(label: &str, count: u32) -> *mut RsactElement {
     unsafe {
         let key = CString::new(label).unwrap();
-        let container = rsact_element_container(key.as_ptr(), 0 /* Vertical */);
-        rsact_element_set_width(container, 20);
-        rsact_element_set_height(container, 2);
-
         let label_key = CString::new("label").unwrap();
         let label_content = CString::new(label).unwrap();
-        let label_elem = rsact_element_text(label_key.as_ptr(), label_content.as_ptr());
-        rsact_element_set_width(label_elem, 20);
-        rsact_element_add_child(container, label_elem);
-
         let value_key = CString::new("value").unwrap();
         let value_content = CString::new(count.to_string()).unwrap();
-        let value_elem = rsact_element_text(value_key.as_ptr(), value_content.as_ptr());
-        rsact_element_set_width(value_elem, 20);
-        rsact_element_add_child(container, value_elem);
 
-        container
+        let children = [
+            rsact_element_text(
+                label_key.as_ptr(),
+                label_content.as_ptr(),
+                20,
+                0xffffff,
+                0,
+                0,
+            ),
+            rsact_element_text(
+                value_key.as_ptr(),
+                value_content.as_ptr(),
+                20,
+                0xffffff,
+                0,
+                0,
+            ),
+        ];
+        rsact_element_container(
+            key.as_ptr(),
+            RSACT_LAYOUT_VERTICAL,
+            20,
+            2,
+            children.as_ptr(),
+            children.len(),
+        )
     }
 }
 
@@ -36,14 +52,18 @@ fn counter_element(label: &str, count: u32) -> *mut RsactElement {
 fn dashboard_element(left_count: u32, right_count: u32) -> *mut RsactElement {
     unsafe {
         let key = CString::new("dashboard").unwrap();
-        let root = rsact_element_container(key.as_ptr(), 1 /* Horizontal */);
-        rsact_element_set_width(root, 40);
-        rsact_element_set_height(root, 2);
-
-        rsact_element_add_child(root, counter_element("left", left_count));
-        rsact_element_add_child(root, counter_element("right", right_count));
-
-        root
+        let children = [
+            counter_element("left", left_count),
+            counter_element("right", right_count),
+        ];
+        rsact_element_container(
+            key.as_ptr(),
+            RSACT_LAYOUT_HORIZONTAL,
+            40,
+            2,
+            children.as_ptr(),
+            children.len(),
+        )
     }
 }
 

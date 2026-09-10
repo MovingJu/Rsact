@@ -3,7 +3,7 @@ use rsact_core::{
     cell::{Cell, Color, Style},
     component::Component,
     diff,
-    element::{Element, ElementKind, Layout},
+    element::{Element, Layout},
     input::{InputReader, Key},
     renderer::Renderer,
     term::{self, RawModeGuard, TerminalSize},
@@ -341,8 +341,8 @@ impl RsactKeyEvent {
 // Rust callers use.
 
 /// An opaque, owned `Element` (sub)tree, built up with the
-/// `rsact_element_*` functions below. Passing one to
-/// `rsact_element_add_child` or `rsact_tree_set_root` transfers ownership —
+/// `rsact_element_*` functions below. Passing one to `rsact_element_container`
+/// (as one of its `children`) or `rsact_tree_set_root` transfers ownership —
 /// never touch or free it again afterward. An `Element` you built but never
 /// attached anywhere must be freed with `rsact_element_free`.
 #[repr(C)]
@@ -350,16 +350,12 @@ pub struct RsactElement {
     _private: [u8; 0],
 }
 
-/// # Safety
-/// See `get_handle`'s safety notes — the same constraints apply here, with
-/// `RsactElement` in place of `RsactHandle`.
-unsafe fn get_element<'a>(elem: *mut RsactElement) -> Option<&'a mut Element> {
-    if elem.is_null() {
-        None
-    } else {
-        Some(unsafe { &mut *(elem as *mut Element) })
-    }
-}
+/// `layout` value for `rsact_element_container`: stack children top to
+/// bottom, each spanning the container's full width.
+pub const RSACT_LAYOUT_VERTICAL: u8 = 0;
+/// `layout` value for `rsact_element_container`: stack children left to
+/// right, each spanning the container's full height.
+pub const RSACT_LAYOUT_HORIZONTAL: u8 = 1;
 
 /// # Safety
 /// `ptr` must be either null or a valid, NUL-terminated, UTF-8 C string.
@@ -370,9 +366,11 @@ unsafe fn cstr_to_str<'a>(ptr: *const c_char) -> Option<&'a str> {
     unsafe { CStr::from_ptr(ptr) }.to_str().ok()
 }
 
-/// Creates a single-line text leaf element, width/height defaulting to
-/// `0`/`1` (set width with `rsact_element_set_width`). Returns null if
-/// `key` or `content` is null or not valid UTF-8.
+/// Creates a single-line text leaf element with its width and style set up
+/// front, so it's ready to nest straight into a `rsact_element_container`
+/// call — no separate setter calls needed. `fg_rgb`/`bg_rgb`/`attrs` use the
+/// same encoding as `rsact_set_cell`. Returns null if `key`/`content` is
+/// null or not valid UTF-8, or `attrs` isn't one of the recognized sums.
 ///
 /// # Safety
 /// `key` and `content` must each be either null or a valid, NUL-terminated,
@@ -386,7 +384,7 @@ unsafe fn cstr_to_str<'a>(ptr: *const c_char) -> Option<&'a str> {
 /// unsafe {
 ///     let key = CString::new("label").unwrap();
 ///     let content = CString::new("hello").unwrap();
-///     let elem = rsact_element_text(key.as_ptr(), content.as_ptr());
+///     let elem = rsact_element_text(key.as_ptr(), content.as_ptr(), 20, 0xffffff, 0x000000, 0);
 ///     assert!(!elem.is_null());
 ///     rsact_element_free(elem);
 /// }
@@ -395,6 +393,10 @@ unsafe fn cstr_to_str<'a>(ptr: *const c_char) -> Option<&'a str> {
 pub unsafe extern "C" fn rsact_element_text(
     key: *const c_char,
     content: *const c_char,
+    width: u16,
+    fg_rgb: u32,
+    bg_rgb: u32,
+    attrs: u8,
 ) -> *mut RsactElement {
     let Some(key) = (unsafe { cstr_to_str(key) }) else {
         return std::ptr::null_mut();
@@ -402,16 +404,48 @@ pub unsafe extern "C" fn rsact_element_text(
     let Some(content) = (unsafe { cstr_to_str(content) }) else {
         return std::ptr::null_mut();
     };
-    Box::into_raw(Box::new(Element::text(key, content))) as *mut RsactElement
+    let Some((bold, underline, reverse)) = seperate_style(attrs) else {
+        return std::ptr::null_mut();
+    };
+    let element = Element::text(key, content).width(width).style(Style {
+        fg: color_hex_to_struct(fg_rgb),
+        bg: color_hex_to_struct(bg_rgb),
+        bold,
+        underline,
+        reverse,
+    });
+    Box::into_raw(Box::new(element)) as *mut RsactElement
 }
 
-/// Creates a container element with no children yet (add them with
-/// `rsact_element_add_child`); width/height default to `0`.
-/// `layout` is `0` for `Vertical`, `1` for `Horizontal`. Returns null if
-/// `key` is null/not valid UTF-8, or `layout` isn't `0`/`1`.
+/// Creates a container with `children` already attached, so a whole subtree
+/// can be built as one nested expression — pass a C99 compound literal
+/// array of `rsact_element_text`/`rsact_element_container` calls directly
+/// as `children` (or a heap-allocated array, for a runtime-determined
+/// count), instead of building each child as a separate named variable and
+/// wiring it in afterward:
+///
+/// ```c
+/// RsactElement *row = rsact_element_container(
+///     "row", RSACT_LAYOUT_HORIZONTAL, 40, 1,
+///     (RsactElement *[]){
+///         rsact_element_text("label", "left", 20, 0xffffff, 0, 0),
+///         rsact_element_text("value", "0",    20, 0xffffff, 0, 0),
+///     }, 2);
+/// ```
+///
+/// Always consumes every non-null pointer in `children` — never use or free
+/// any of them again after this call, whether or not it succeeds.
+/// `layout` is `RSACT_LAYOUT_VERTICAL` or `RSACT_LAYOUT_HORIZONTAL`. Returns
+/// null if `key` is null/not valid UTF-8, `layout` isn't one of those two
+/// values, or any pointer in `children` is null.
 ///
 /// # Safety
 /// `key` must be either null or a valid, NUL-terminated, UTF-8 C string.
+/// `children` must be either null (with `n_children == 0`) or point to an
+/// array of exactly `n_children` valid `*mut RsactElement` pointers, each
+/// meeting the pointer requirements of `rsact_element_free` — and no two of
+/// them (including nested descendants already attached to one of them) may
+/// alias each other.
 ///
 /// # Examples
 /// ```rust,no_run
@@ -419,155 +453,70 @@ pub unsafe extern "C" fn rsact_element_text(
 /// use std::ffi::CString;
 ///
 /// unsafe {
-///     let key = CString::new("root").unwrap();
-///     let elem = rsact_element_container(key.as_ptr(), 0);
-///     assert!(!elem.is_null());
-///     rsact_element_free(elem);
+///     let child_key = CString::new("child").unwrap();
+///     let child_content = CString::new("hi").unwrap();
+///     let child = rsact_element_text(child_key.as_ptr(), child_content.as_ptr(), 10, 0xffffff, 0, 0);
+///
+///     let root_key = CString::new("root").unwrap();
+///     let children = [child];
+///     let root = rsact_element_container(root_key.as_ptr(), RSACT_LAYOUT_VERTICAL, 10, 1, children.as_ptr(), children.len());
+///     assert!(!root.is_null());
+///     rsact_element_free(root); // also frees the attached child
 /// }
 /// ```
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rsact_element_container(
     key: *const c_char,
     layout: u8,
+    width: u16,
+    height: u16,
+    children: *const *mut RsactElement,
+    n_children: usize,
 ) -> *mut RsactElement {
+    // Always take ownership of every non-null child pointer first, even on
+    // a failure below, so a caller never has to guess which ones (if any)
+    // still need freeing themselves.
+    let mut owned_children = Vec::with_capacity(n_children);
+    let mut saw_null_child = false;
+    for i in 0..n_children {
+        let child_ptr = if children.is_null() {
+            std::ptr::null_mut()
+        } else {
+            unsafe { *children.add(i) }
+        };
+        if child_ptr.is_null() {
+            saw_null_child = true;
+            continue;
+        }
+        owned_children.push(*unsafe { Box::from_raw(child_ptr as *mut Element) });
+    }
+    if saw_null_child {
+        return std::ptr::null_mut();
+    }
+
     let Some(key) = (unsafe { cstr_to_str(key) }) else {
         return std::ptr::null_mut();
     };
     let layout = match layout {
-        0 => Layout::Vertical,
-        1 => Layout::Horizontal,
+        RSACT_LAYOUT_VERTICAL => Layout::Vertical,
+        RSACT_LAYOUT_HORIZONTAL => Layout::Horizontal,
         _ => return std::ptr::null_mut(),
     };
-    Box::into_raw(Box::new(Element::container(key, layout, Vec::new()))) as *mut RsactElement
+    let element = Element::container(key, layout, owned_children)
+        .width(width)
+        .height(height);
+    Box::into_raw(Box::new(element)) as *mut RsactElement
 }
 
-/// Sets the extent `elem` asks its parent for along the parent's stack
-/// axis. Returns `0` on success, `-1` if `elem` is null.
-///
-/// # Safety
-/// `elem` must be a valid pointer returned by `rsact_element_text`/
-/// `rsact_element_container` that hasn't yet been passed to
-/// `rsact_element_add_child`, `rsact_tree_set_root`, or
-/// `rsact_element_free`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rsact_element_set_width(elem: *mut RsactElement, width: u16) -> i32 {
-    let Some(elem) = (unsafe { get_element(elem) }) else {
-        return -1;
-    };
-    elem.width = width;
-    0
-}
-
-/// Sets the extent `elem` asks its parent for along the parent's stack
-/// axis. Returns `0` on success, `-1` if `elem` is null.
-///
-/// # Safety
-/// Same as `rsact_element_set_width`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rsact_element_set_height(elem: *mut RsactElement, height: u16) -> i32 {
-    let Some(elem) = (unsafe { get_element(elem) }) else {
-        return -1;
-    };
-    elem.height = height;
-    0
-}
-
-/// Sets the style of a `Text` leaf; same `fg_rgb`/`bg_rgb`/`attrs` encoding
-/// as `rsact_set_cell`. Returns `0` on success, `-1` if `elem` is null,
-/// `-2` if `elem` is a container (styling is a no-op there), `-3` if
-/// `attrs` isn't one of the recognized sums.
-///
-/// # Safety
-/// Same as `rsact_element_set_width`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rsact_element_set_style(
-    elem: *mut RsactElement,
-    fg_rgb: u32,
-    bg_rgb: u32,
-    attrs: u8,
-) -> i32 {
-    let Some(elem) = (unsafe { get_element(elem) }) else {
-        return -1;
-    };
-    let Some((bold, underline, reverse)) = seperate_style(attrs) else {
-        return -3;
-    };
-    match &mut elem.kind {
-        ElementKind::Text(text) => {
-            text.style = Style {
-                fg: color_hex_to_struct(fg_rgb),
-                bg: color_hex_to_struct(bg_rgb),
-                bold,
-                underline,
-                reverse,
-            };
-            0
-        }
-        ElementKind::Container { .. } => -2,
-    }
-}
-
-/// Appends `child` as the last child of `container`. Always consumes
-/// `child` — never use or free it again after this call, whether or not it
-/// succeeds. Returns `0` on success, `-1` if `container` or `child` is
-/// null, `-2` if `container` is a `Text` leaf (it can't have children).
-///
-/// # Safety
-/// `container` and `child` must each be either null or a valid pointer
-/// returned by `rsact_element_text`/`rsact_element_container` that hasn't
-/// yet been passed to `rsact_element_add_child`, `rsact_tree_set_root`, or
-/// `rsact_element_free`. `container` and `child` must not be the same
-/// pointer.
-///
-/// # Examples
-/// ```rust,no_run
-/// use rsact_ffi::*;
-/// use std::ffi::CString;
-///
-/// unsafe {
-///     let root_key = CString::new("root").unwrap();
-///     let root = rsact_element_container(root_key.as_ptr(), 0);
-///
-///     let child_key = CString::new("child").unwrap();
-///     let child_content = CString::new("hi").unwrap();
-///     let child = rsact_element_text(child_key.as_ptr(), child_content.as_ptr());
-///
-///     assert_eq!(rsact_element_add_child(root, child), 0);
-///     rsact_element_free(root); // also frees the attached child
-/// }
-/// ```
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rsact_element_add_child(
-    container: *mut RsactElement,
-    child: *mut RsactElement,
-) -> i32 {
-    if child.is_null() {
-        return -1;
-    }
-    // Always take ownership of `child`, even on failure below, so a caller
-    // never has to guess whether it still needs freeing.
-    let child = *unsafe { Box::from_raw(child as *mut Element) };
-    let Some(container) = (unsafe { get_element(container) }) else {
-        return -1;
-    };
-    match &mut container.kind {
-        ElementKind::Container { children, .. } => {
-            children.push(child);
-            0
-        }
-        ElementKind::Text(_) => -2,
-    }
-}
-
-/// Frees an element (sub)tree that was never attached via
-/// `rsact_element_add_child` or `rsact_tree_set_root`. Does nothing if
+/// Frees an element (sub)tree that was never attached to a
+/// `rsact_element_container` call or `rsact_tree_set_root`. Does nothing if
 /// `elem` is null.
 ///
 /// # Safety
 /// `elem` must be either null or a valid pointer returned by
 /// `rsact_element_text`/`rsact_element_container` that hasn't already been
-/// passed to `rsact_element_add_child`, `rsact_tree_set_root`, or
-/// `rsact_element_free`. Never call this twice on the same pointer.
+/// passed as a child to `rsact_element_container`, to `rsact_tree_set_root`,
+/// or to `rsact_element_free`. Never call this twice on the same pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rsact_element_free(elem: *mut RsactElement) {
     if elem.is_null() {
@@ -668,8 +617,8 @@ pub unsafe extern "C" fn rsact_tree_create(width: u16, height: u16) -> *mut Rsac
 /// `rsact_tree_create` that hasn't been passed to `rsact_tree_destroy` yet.
 /// `element` must be either null or a valid pointer returned by
 /// `rsact_element_text`/`rsact_element_container` that hasn't yet been
-/// passed to `rsact_element_add_child`, `rsact_tree_set_root`, or
-/// `rsact_element_free`.
+/// passed as a child to `rsact_element_container`, to
+/// `rsact_tree_set_root`, or to `rsact_element_free`.
 ///
 /// # Examples
 /// ```rust,no_run
@@ -680,7 +629,7 @@ pub unsafe extern "C" fn rsact_tree_create(width: u16, height: u16) -> *mut Rsac
 ///     let handle = rsact_tree_create(20, 1);
 ///     let key = CString::new("greeting").unwrap();
 ///     let content = CString::new("hi").unwrap();
-///     let root = rsact_element_text(key.as_ptr(), content.as_ptr());
+///     let root = rsact_element_text(key.as_ptr(), content.as_ptr(), 10, 0xffffff, 0, 0);
 ///     assert_eq!(rsact_tree_set_root(handle, root), 0);
 ///     assert_eq!(rsact_tree_present(handle), 0);
 ///     rsact_tree_destroy(handle);

@@ -22,6 +22,18 @@
  */
 #define RSACT_KEY_CTRL_BASE 256
 
+/**
+ * `layout` value for `rsact_element_container`: stack children top to
+ * bottom, each spanning the container's full width.
+ */
+#define RSACT_LAYOUT_VERTICAL 0
+
+/**
+ * `layout` value for `rsact_element_container`: stack children left to
+ * right, each spanning the container's full height.
+ */
+#define RSACT_LAYOUT_HORIZONTAL 1
+
 typedef struct RsactHandle {
   uint8_t _private[0];
 } RsactHandle;
@@ -33,8 +45,8 @@ typedef struct RsactKeyEvent {
 
 /**
  * An opaque, owned `Element` (sub)tree, built up with the
- * `rsact_element_*` functions below. Passing one to
- * `rsact_element_add_child` or `rsact_tree_set_root` transfers ownership —
+ * `rsact_element_*` functions below. Passing one to `rsact_element_container`
+ * (as one of its `children`) or `rsact_tree_set_root` transfers ownership —
  * never touch or free it again afterward. An `Element` you built but never
  * attached anywhere must be freed with `rsact_element_free`.
  */
@@ -201,9 +213,11 @@ int32_t rsact_render(struct RsactHandle *handle);
 int32_t rsact_poll_key(struct RsactHandle *handle, struct RsactKeyEvent *out_event);
 
 /**
- * Creates a single-line text leaf element, width/height defaulting to
- * `0`/`1` (set width with `rsact_element_set_width`). Returns null if
- * `key` or `content` is null or not valid UTF-8.
+ * Creates a single-line text leaf element with its width and style set up
+ * front, so it's ready to nest straight into a `rsact_element_container`
+ * call — no separate setter calls needed. `fg_rgb`/`bg_rgb`/`attrs` use the
+ * same encoding as `rsact_set_cell`. Returns null if `key`/`content` is
+ * null or not valid UTF-8, or `attrs` isn't one of the recognized sums.
  *
  * # Safety
  * `key` and `content` must each be either null or a valid, NUL-terminated,
@@ -217,22 +231,49 @@ int32_t rsact_poll_key(struct RsactHandle *handle, struct RsactKeyEvent *out_eve
  * unsafe {
  *     let key = CString::new("label").unwrap();
  *     let content = CString::new("hello").unwrap();
- *     let elem = rsact_element_text(key.as_ptr(), content.as_ptr());
+ *     let elem = rsact_element_text(key.as_ptr(), content.as_ptr(), 20, 0xffffff, 0x000000, 0);
  *     assert!(!elem.is_null());
  *     rsact_element_free(elem);
  * }
  * ```
  */
-struct RsactElement *rsact_element_text(const char *key, const char *content);
+struct RsactElement *rsact_element_text(const char *key,
+                                        const char *content,
+                                        uint16_t width,
+                                        uint32_t fg_rgb,
+                                        uint32_t bg_rgb,
+                                        uint8_t attrs);
 
 /**
- * Creates a container element with no children yet (add them with
- * `rsact_element_add_child`); width/height default to `0`.
- * `layout` is `0` for `Vertical`, `1` for `Horizontal`. Returns null if
- * `key` is null/not valid UTF-8, or `layout` isn't `0`/`1`.
+ * Creates a container with `children` already attached, so a whole subtree
+ * can be built as one nested expression — pass a C99 compound literal
+ * array of `rsact_element_text`/`rsact_element_container` calls directly
+ * as `children` (or a heap-allocated array, for a runtime-determined
+ * count), instead of building each child as a separate named variable and
+ * wiring it in afterward:
+ *
+ * ```c
+ * RsactElement *row = rsact_element_container(
+ *     "row", RSACT_LAYOUT_HORIZONTAL, 40, 1,
+ *     (RsactElement *[]){
+ *         rsact_element_text("label", "left", 20, 0xffffff, 0, 0),
+ *         rsact_element_text("value", "0",    20, 0xffffff, 0, 0),
+ *     }, 2);
+ * ```
+ *
+ * Always consumes every non-null pointer in `children` — never use or free
+ * any of them again after this call, whether or not it succeeds.
+ * `layout` is `RSACT_LAYOUT_VERTICAL` or `RSACT_LAYOUT_HORIZONTAL`. Returns
+ * null if `key` is null/not valid UTF-8, `layout` isn't one of those two
+ * values, or any pointer in `children` is null.
  *
  * # Safety
  * `key` must be either null or a valid, NUL-terminated, UTF-8 C string.
+ * `children` must be either null (with `n_children == 0`) or point to an
+ * array of exactly `n_children` valid `*mut RsactElement` pointers, each
+ * meeting the pointer requirements of `rsact_element_free` — and no two of
+ * them (including nested descendants already attached to one of them) may
+ * alias each other.
  *
  * # Examples
  * ```rust,no_run
@@ -240,93 +281,35 @@ struct RsactElement *rsact_element_text(const char *key, const char *content);
  * use std::ffi::CString;
  *
  * unsafe {
- *     let key = CString::new("root").unwrap();
- *     let elem = rsact_element_container(key.as_ptr(), 0);
- *     assert!(!elem.is_null());
- *     rsact_element_free(elem);
- * }
- * ```
- */
-struct RsactElement *rsact_element_container(const char *key, uint8_t layout);
-
-/**
- * Sets the extent `elem` asks its parent for along the parent's stack
- * axis. Returns `0` on success, `-1` if `elem` is null.
- *
- * # Safety
- * `elem` must be a valid pointer returned by `rsact_element_text`/
- * `rsact_element_container` that hasn't yet been passed to
- * `rsact_element_add_child`, `rsact_tree_set_root`, or
- * `rsact_element_free`.
- */
-int32_t rsact_element_set_width(struct RsactElement *elem, uint16_t width);
-
-/**
- * Sets the extent `elem` asks its parent for along the parent's stack
- * axis. Returns `0` on success, `-1` if `elem` is null.
- *
- * # Safety
- * Same as `rsact_element_set_width`.
- */
-int32_t rsact_element_set_height(struct RsactElement *elem, uint16_t height);
-
-/**
- * Sets the style of a `Text` leaf; same `fg_rgb`/`bg_rgb`/`attrs` encoding
- * as `rsact_set_cell`. Returns `0` on success, `-1` if `elem` is null,
- * `-2` if `elem` is a container (styling is a no-op there), `-3` if
- * `attrs` isn't one of the recognized sums.
- *
- * # Safety
- * Same as `rsact_element_set_width`.
- */
-int32_t rsact_element_set_style(struct RsactElement *elem,
-                                uint32_t fg_rgb,
-                                uint32_t bg_rgb,
-                                uint8_t attrs);
-
-/**
- * Appends `child` as the last child of `container`. Always consumes
- * `child` — never use or free it again after this call, whether or not it
- * succeeds. Returns `0` on success, `-1` if `container` or `child` is
- * null, `-2` if `container` is a `Text` leaf (it can't have children).
- *
- * # Safety
- * `container` and `child` must each be either null or a valid pointer
- * returned by `rsact_element_text`/`rsact_element_container` that hasn't
- * yet been passed to `rsact_element_add_child`, `rsact_tree_set_root`, or
- * `rsact_element_free`. `container` and `child` must not be the same
- * pointer.
- *
- * # Examples
- * ```rust,no_run
- * use rsact_ffi::*;
- * use std::ffi::CString;
- *
- * unsafe {
- *     let root_key = CString::new("root").unwrap();
- *     let root = rsact_element_container(root_key.as_ptr(), 0);
- *
  *     let child_key = CString::new("child").unwrap();
  *     let child_content = CString::new("hi").unwrap();
- *     let child = rsact_element_text(child_key.as_ptr(), child_content.as_ptr());
+ *     let child = rsact_element_text(child_key.as_ptr(), child_content.as_ptr(), 10, 0xffffff, 0, 0);
  *
- *     assert_eq!(rsact_element_add_child(root, child), 0);
+ *     let root_key = CString::new("root").unwrap();
+ *     let children = [child];
+ *     let root = rsact_element_container(root_key.as_ptr(), RSACT_LAYOUT_VERTICAL, 10, 1, children.as_ptr(), children.len());
+ *     assert!(!root.is_null());
  *     rsact_element_free(root); // also frees the attached child
  * }
  * ```
  */
-int32_t rsact_element_add_child(struct RsactElement *container, struct RsactElement *child);
+struct RsactElement *rsact_element_container(const char *key,
+                                             uint8_t layout,
+                                             uint16_t width,
+                                             uint16_t height,
+                                             struct RsactElement *const *children,
+                                             uintptr_t n_children);
 
 /**
- * Frees an element (sub)tree that was never attached via
- * `rsact_element_add_child` or `rsact_tree_set_root`. Does nothing if
+ * Frees an element (sub)tree that was never attached to a
+ * `rsact_element_container` call or `rsact_tree_set_root`. Does nothing if
  * `elem` is null.
  *
  * # Safety
  * `elem` must be either null or a valid pointer returned by
  * `rsact_element_text`/`rsact_element_container` that hasn't already been
- * passed to `rsact_element_add_child`, `rsact_tree_set_root`, or
- * `rsact_element_free`. Never call this twice on the same pointer.
+ * passed as a child to `rsact_element_container`, to `rsact_tree_set_root`,
+ * or to `rsact_element_free`. Never call this twice on the same pointer.
  */
 void rsact_element_free(struct RsactElement *elem);
 
@@ -364,8 +347,8 @@ struct RsactTreeHandle *rsact_tree_create(uint16_t width, uint16_t height);
  * `rsact_tree_create` that hasn't been passed to `rsact_tree_destroy` yet.
  * `element` must be either null or a valid pointer returned by
  * `rsact_element_text`/`rsact_element_container` that hasn't yet been
- * passed to `rsact_element_add_child`, `rsact_tree_set_root`, or
- * `rsact_element_free`.
+ * passed as a child to `rsact_element_container`, to
+ * `rsact_tree_set_root`, or to `rsact_element_free`.
  *
  * # Examples
  * ```rust,no_run
@@ -376,7 +359,7 @@ struct RsactTreeHandle *rsact_tree_create(uint16_t width, uint16_t height);
  *     let handle = rsact_tree_create(20, 1);
  *     let key = CString::new("greeting").unwrap();
  *     let content = CString::new("hi").unwrap();
- *     let root = rsact_element_text(key.as_ptr(), content.as_ptr());
+ *     let root = rsact_element_text(key.as_ptr(), content.as_ptr(), 10, 0xffffff, 0, 0);
  *     assert_eq!(rsact_tree_set_root(handle, root), 0);
  *     assert_eq!(rsact_tree_present(handle), 0);
  *     rsact_tree_destroy(handle);
