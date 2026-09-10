@@ -1,4 +1,11 @@
-use rsact_core::{term::RawModeGuard, *};
+use rsact_core::{
+    cell::Style,
+    component::Component,
+    element::{Element, Layout},
+    term::RawModeGuard,
+    tree::Tree,
+    *,
+};
 
 fn main() {
     // Setup terminal
@@ -31,7 +38,86 @@ fn main() {
     }
 
     std::thread::sleep(core::time::Duration::from_millis(3000));
+
+    component_tree_demo(&mut real_dom, &mut rend);
+
+    std::thread::sleep(core::time::Duration::from_millis(3000));
     println!();
+}
+
+/// A leaf component owning its own local state: a label and the count it's
+/// currently showing.
+struct Counter {
+    label: &'static str,
+    count: u32,
+}
+
+impl Component for Counter {
+    fn render(&self) -> Element {
+        Element::container(
+            self.label,
+            Layout::Vertical,
+            20,
+            2,
+            vec![
+                Element::text("label", 20, self.label, Style::default()),
+                Element::text("value", 20, self.count.to_string(), Style::default()),
+            ],
+        )
+    }
+}
+
+/// Two `Counter`s side by side — the second, nested level of the component
+/// tree. Each `Counter` advances its own `count` independently.
+struct Dashboard {
+    left: Counter,
+    right: Counter,
+}
+
+impl Component for Dashboard {
+    fn render(&self) -> Element {
+        Element::container(
+            "dashboard",
+            Layout::Horizontal,
+            40,
+            2,
+            vec![self.left.render(), self.right.render()],
+        )
+    }
+}
+
+/// Drives a small `Tree` for a few frames, incrementing only the left
+/// counter each frame to show that reconciling the tree repaints just the
+/// subtree that actually changed — the right counter's cells are never
+/// touched again after the first frame.
+fn component_tree_demo<W: std::io::Write>(
+    real_dom: &mut buffer::Buffer,
+    rend: &mut renderer::Renderer<W>,
+) {
+    let mut tree = Tree::new(
+        Dashboard {
+            left: Counter {
+                label: "left",
+                count: 0,
+            },
+            right: Counter {
+                label: "right",
+                count: 42,
+            },
+        },
+        40,
+        2,
+    );
+
+    for _ in 0..5 {
+        let virtual_dom = tree.frame();
+        let differences = diff::diff(real_dom, virtual_dom);
+        rend.draw(&differences).expect("Failed stdout");
+        real_dom.clone_from(virtual_dom);
+
+        std::thread::sleep(core::time::Duration::from_millis(500));
+        tree.root_mut().left.count += 1;
+    }
 }
 
 fn rectangle(buffer: &mut buffer::Buffer, row: u16, col: u16) {
