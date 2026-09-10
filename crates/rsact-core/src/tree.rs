@@ -3,11 +3,14 @@
 // this module; a caller still runs those over the `Buffer` this module
 // writes into to get bytes to send to the terminal.
 use std::collections::HashMap;
+use std::io::{self, Write};
 
 use crate::buffer::Buffer;
 use crate::cell::Cell;
 use crate::component::Component;
+use crate::diff::diff;
 use crate::element::{Element, ElementKind, Key, Rect, layout_children};
+use crate::renderer::Renderer;
 
 /// The write side of painting an element tree. `Buffer` is the only real
 /// implementer; tests substitute a counting wrapper to verify that
@@ -22,12 +25,15 @@ impl Paint for Buffer {
     }
 }
 
-/// Owns a `Component`, the persistent `Buffer` it paints into, and the
-/// previous frame's `Element` tree so each call to `frame` only repaints
-/// what changed.
+/// Owns a `Component`, the persistent `Buffer` it paints into, the previous
+/// frame's `Element` tree (so each call to `frame` only repaints what
+/// changed), and a second `Buffer` mirroring what's actually on screen (so
+/// `present` can hand v0.1's `diff`/`Renderer` a correct pair of buffers
+/// without the caller hand-rolling that loop itself).
 pub struct Tree<C: Component> {
     root: C,
     buffer: Buffer,
+    on_screen: Buffer,
     prev: Option<(Element, Rect)>,
 }
 
@@ -36,14 +42,14 @@ impl<C: Component> Tree<C> {
         Self {
             root,
             buffer: Buffer::new(width, height),
+            on_screen: Buffer::new(width, height),
             prev: None,
         }
     }
 
     /// Renders the root component, reconciles it against the previous
     /// frame's tree, paints only what changed into the internal `Buffer`,
-    /// and returns that `Buffer` so the caller can run it through v0.1's
-    /// `diff`/`Renderer` pipeline unchanged.
+    /// and returns that `Buffer`.
     pub fn frame(&mut self) -> &Buffer {
         let next = self.root.render();
         let rect = Rect {
@@ -56,6 +62,19 @@ impl<C: Component> Tree<C> {
         reconcile_paint(&next, rect, prev, &mut self.buffer);
         self.prev = Some((next, rect));
         &self.buffer
+    }
+
+    /// Renders one frame (see `frame`) and immediately writes it to the
+    /// terminal through `renderer`: diffs the new frame against what this
+    /// `Tree` last drew, draws only that patch set, then updates its
+    /// on-screen record to match. This is the one call a caller needs per
+    /// frame — no manual `diff`/`clone_from` bookkeeping required.
+    pub fn present<W: Write>(&mut self, renderer: &mut Renderer<W>) -> io::Result<()> {
+        self.frame();
+        let patches = diff(&self.on_screen, &self.buffer);
+        renderer.draw(&patches)?;
+        self.on_screen.clone_from(&self.buffer);
+        Ok(())
     }
 
     pub fn root(&self) -> &C {
@@ -421,6 +440,56 @@ mod tests {
             text_at(1, 20, 3, buffer),
             "100",
             "right counter's state is independent and untouched"
+        );
+    }
+
+    /// A `Write` sink cloneable via `Rc<RefCell<_>>`, so a test can hold one
+    /// handle to inspect written bytes while `Renderer` owns another.
+    #[derive(Clone, Default)]
+    struct SharedBuf(std::rc::Rc<std::cell::RefCell<Vec<u8>>>);
+
+    impl Write for SharedBuf {
+        fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+            self.0.borrow_mut().extend_from_slice(data);
+            Ok(data.len())
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn present_diffs_against_its_own_on_screen_record_not_a_caller_supplied_buffer() {
+        // A `Tree` sized smaller than some unrelated terminal-sized buffer a
+        // caller might have lying around must still work: `present` should
+        // never hand `diff` a dimension mismatch, because it diffs its own
+        // `buffer`/`on_screen` pair, not anything the caller passes in.
+        let mut tree = Tree::new(Counter { count: 0 }, 20, 2);
+        let out = SharedBuf::default();
+        let mut renderer = Renderer::new(out.clone());
+
+        tree.present(&mut renderer)
+            .expect("present should not panic");
+        assert!(
+            !out.0.borrow().is_empty(),
+            "first frame should draw something"
+        );
+
+        out.0.borrow_mut().clear();
+        tree.present(&mut renderer)
+            .expect("present should not panic");
+        assert!(
+            out.0.borrow().is_empty(),
+            "re-presenting an unchanged frame should draw nothing"
+        );
+
+        out.0.borrow_mut().clear();
+        tree.root_mut().count += 1;
+        tree.present(&mut renderer)
+            .expect("present should not panic");
+        assert!(
+            !out.0.borrow().is_empty(),
+            "presenting after a state change should draw the diff"
         );
     }
 }

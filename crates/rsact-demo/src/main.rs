@@ -38,7 +38,7 @@ fn main() {
 
     std::thread::sleep(core::time::Duration::from_millis(3000));
 
-    component_tree_demo(&mut real_dom, &mut rend);
+    component_tree_demo(&mut rend);
 
     std::thread::sleep(core::time::Duration::from_millis(3000));
     println!();
@@ -88,11 +88,9 @@ impl Component for Dashboard {
 /// Drives a small `Tree` for a few frames, incrementing only the left
 /// counter each frame to show that reconciling the tree repaints just the
 /// subtree that actually changed — the right counter's cells are never
-/// touched again after the first frame.
-fn component_tree_demo<W: std::io::Write>(
-    real_dom: &mut buffer::Buffer,
-    rend: &mut renderer::Renderer<W>,
-) {
+/// touched again after the first frame. `Tree::present` owns the
+/// diff/draw/swap loop, so the caller only has to call it once per frame.
+fn component_tree_demo<W: std::io::Write>(rend: &mut renderer::Renderer<W>) {
     let mut tree = Tree::new(
         Dashboard {
             left: Counter {
@@ -109,11 +107,7 @@ fn component_tree_demo<W: std::io::Write>(
     );
 
     for _ in 0..5 {
-        let virtual_dom = tree.frame();
-        let differences = diff::diff(real_dom, virtual_dom);
-        rend.draw(&differences).expect("Failed stdout");
-        real_dom.clone_from(virtual_dom);
-
+        tree.present(rend).expect("Failed stdout");
         std::thread::sleep(core::time::Duration::from_millis(500));
         tree.root_mut().left.count += 1;
     }
