@@ -229,7 +229,7 @@ on_screen = buffer.clone()    commit as the baseline for the next frame
 
 Current limitations, intentional for v0.2.0 (see [#2](https://github.com/MovingJu/Rsact/issues/2)'s non-goals): no flexbox-style layout (each child just declares a fixed width/height along its parent's stack axis), `Text` is single-line only, no built-in widget set beyond `Text`/`Container` yet, and everything still runs single-threaded and synchronously (opt-in multithreading is [v0.3.0](https://github.com/MovingJu/Rsact/issues/3)'s job).
 
-A deeper concepts walkthrough with a nested-tree diagram lives on the [wiki](https://github.com/MovingJu/Rsact/wiki).
+A deeper concepts walkthrough with a nested-tree diagram lives on the [Component Tree wiki page](https://github.com/MovingJu/Rsact/wiki/Component-Tree).
 
 ## Examples
 

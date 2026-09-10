@@ -103,7 +103,7 @@ fn main() -> std::io::Result<()> {
 }
 ```
 
-`Tree` keeps the previous frame's tree and reconciles the new one against it by matching children **by `Key`, not list position** — an unchanged subtree costs zero `Buffer` writes, and a reordered keyed child is recognized as "moved" rather than removed-then-re-added. See the [wiki](https://github.com/MovingJu/Rsact/wiki) for a deeper concepts walkthrough and a nested-tree diagram.
+`Tree` keeps the previous frame's tree and reconciles the new one against it by matching children **by `Key`, not list position** — an unchanged subtree costs zero `Buffer` writes, and a reordered keyed child is recognized as "moved" rather than removed-then-re-added. See the [Component Tree wiki page](https://github.com/MovingJu/Rsact/wiki/Component-Tree) for a deeper concepts walkthrough and a nested-tree diagram.
 
 ## Learn more
 
