@@ -50,7 +50,7 @@ Rsact/
 │   ├── rsact-demo/        # rsact-core-only demo (animated rectangle + a Dashboard/Counter component tree)
 │   └── rsact-ffi/         # C ABI; build.rs generates include/rsact.h via cbindgen
 ├── examples/c/             # 4 C examples (src/) linking a prebuilt rsact-ffi release via CMake FetchContent
-├── bindings/python/        # ctypes wrapper around rsact-ffi's C ABI, no compiled extension (see #24)
+├── examples/python/        # ctypes wrapper (rsact.py) + 3 example scripts, run via `uv run` (see #24)
 ├── .github/workflows/      # PR title & commit message convention checks
 ├── CONTRIBUTING.md
 └── LICENSE (MIT)
@@ -152,11 +152,11 @@ The full C ABI surface is in [`crates/rsact-ffi/include/rsact.h`](https://github
 
 ### Using it from Python
 
-[`bindings/python`](bindings/python) is a pure-`ctypes` wrapper around the same C ABI — no compiled extension, no build step of its own (a real PyPI package via PyO3/maturin is tracked separately in [#24](https://github.com/MovingJu/Rsact/issues/24)). Build the native shared library once, then import it straight from a checkout:
+[`examples/python`](examples/python) is a pure-`ctypes` wrapper (`rsact.py`) around the same C ABI — no compiled extension, no build step of its own (a real PyPI package via PyO3/maturin is tracked separately in [#24](https://github.com/MovingJu/Rsact/issues/24)). Build the native shared library once, then run a script straight from a checkout with [`uv`](https://docs.astral.sh/uv/) (no dependencies, but `uv run` skips the "do I have the right Python" step):
 
 ```sh
 cargo build --release -p rsact-ffi   # produces target/release/librsact_ffi.so (.dylib/.dll)
-python3 bindings/python/examples/tree.py
+uv run examples/python/tree.py
 ```
 
 ```python
@@ -175,7 +175,7 @@ with Tree(20, 2) as tree:
         )
 ```
 
-See [`bindings/python/README.md`](bindings/python/README.md) for the full API and all three examples (`basic.py`/`animate.py`/`tree.py`, mirroring the Rust/C ones).
+See [`examples/python/README.md`](examples/python/README.md) for the full API and all three examples (`basic.py`/`animate.py`/`tree.py`, mirroring the Rust/C ones).
 
 ## How it works (the render pipeline)
 
@@ -281,6 +281,7 @@ A deeper concepts walkthrough with a nested-tree diagram lives on the [Component
 | `cargo run --example animate -p rsact-ffi` | A `#` character moving across row 5 (~16ms/frame) |
 | `cargo run --example tree -p rsact-ffi` | A two-counter `Dashboard`, built purely through the C-style `rsact_element_*`/`rsact_tree_*` API |
 | `examples/c/src/basic.c` · `animate.c` · `input.c` · `tree.c` | The same examples (plus key-input polling, plus the `Dashboard` component tree), reproduced in plain C against `rsact-ffi`'s header. [`examples/c/CMakeLists.txt`](https://github.com/MovingJu/Rsact/blob/main/examples/c/CMakeLists.txt) builds all four against a prebuilt `rsact-ffi` downloaded from the matching GitHub Release |
+| `uv run examples/python/basic.py` · `animate.py` · `tree.py` | The same three examples again, reproduced in Python against a pure-`ctypes` wrapper (`examples/python/rsact.py`) — no compiled extension |
 
 ## Development
 

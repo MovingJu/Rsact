@@ -5,15 +5,11 @@ implement in Python, same as the C binding.
 
 Mirrors examples/c/src/tree.c and rsact-ffi's tree.rs example.
 
-Run with: python3 bindings/python/examples/tree.py
+Run with: uv run examples/python/tree.py
 (from the repo root, after `cargo build --release -p rsact-ffi`)
 """
 
-import os
-import sys
 import time
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from rsact import Element, RSACT_LAYOUT_HORIZONTAL, RSACT_LAYOUT_VERTICAL, Tree
 

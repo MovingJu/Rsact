@@ -3,15 +3,11 @@
 
 Mirrors examples/c/src/basic.c and rsact-ffi's basic.rs example.
 
-Run with: python3 bindings/python/examples/basic.py
+Run with: uv run examples/python/basic.py
 (from the repo root, after `cargo build --release -p rsact-ffi`)
 """
 
-import os
-import sys
 import time
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from rsact import Terminal
 

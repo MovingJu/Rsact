@@ -17,7 +17,13 @@ This produces `target/release/librsact_ffi.so` (Linux) / `.dylib` (macOS) / `tar
 export RSACT_FFI_LIB=/path/to/librsact_ffi.so
 ```
 
-No `pip install` — just make sure `bindings/python` is on `sys.path` (the example scripts do this for you with a relative `sys.path.insert`).
+No dependencies (just the standard library), so [`uv run`](https://docs.astral.sh/uv/) is the default way to run anything here — it picks up this directory's `pyproject.toml`, provisions a Python interpreter if needed, and runs the script, no `pip install`/virtualenv setup of your own required:
+
+```sh
+uv run examples/python/basic.py
+```
+
+Plain `python3 examples/python/basic.py` works too (same standard library, no deps either way) — `uv` just removes the "do I have the right Python/venv" step.
 
 ## Quick start
 
@@ -60,9 +66,9 @@ with Tree(20, 2) as tree:
 
 | Run it with | What it shows |
 |---|---|
-| `python3 bindings/python/examples/basic.py` | A single static frame (a horizontal line on row 0), then exits — mirrors `rsact-ffi`'s `basic.rs`/`examples/c/src/basic.c` |
-| `python3 bindings/python/examples/animate.py` | A `#` character moving across row 5 (~16ms/frame) — mirrors `animate.rs`/`animate.c` |
-| `python3 bindings/python/examples/tree.py` | A two-counter `Dashboard`, built through the component-tree API — mirrors `tree.rs`/`tree.c` |
+| `uv run examples/python/basic.py` | A single static frame (a horizontal line on row 0), then exits — mirrors `rsact-ffi`'s `basic.rs`/`examples/c/src/basic.c` |
+| `uv run examples/python/animate.py` | A `#` character moving across row 5 (~16ms/frame) — mirrors `animate.rs`/`animate.c` |
+| `uv run examples/python/tree.py` | A two-counter `Dashboard`, built through the component-tree API — mirrors `tree.rs`/`tree.c` |
 
 All three run straight from a checkout (no install step) as long as `rsact-ffi` has been built per Setup above.
 

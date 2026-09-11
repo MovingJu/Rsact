@@ -78,9 +78,7 @@ def _find_library() -> str:
         raise RuntimeError(f"rsact: unsupported platform {system!r}")
 
     here = os.path.dirname(os.path.abspath(__file__))
-    dev_candidate = os.path.normpath(
-        os.path.join(here, "..", "..", "..", "target", "release", name)
-    )
+    dev_candidate = os.path.normpath(os.path.join(here, "..", "..", "target", "release", name))
     if os.path.exists(dev_candidate):
         return dev_candidate
 

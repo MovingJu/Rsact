@@ -3,15 +3,11 @@
 
 Mirrors examples/c/src/animate.c and rsact-ffi's animate.rs example.
 
-Run with: python3 bindings/python/examples/animate.py
+Run with: uv run examples/python/animate.py
 (from the repo root, after `cargo build --release -p rsact-ffi`)
 """
 
-import os
-import sys
 import time
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from rsact import Terminal
 

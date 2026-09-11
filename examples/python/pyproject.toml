@@ -1,0 +1,9 @@
+[project]
+name = "rsact"
+version = "0.2.0"
+description = "ctypes bindings for rsact-ffi's C ABI, plus example scripts"
+requires-python = ">=3.9"
+dependencies = []
+
+[tool.uv]
+package = false
