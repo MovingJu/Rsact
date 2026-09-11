@@ -8,8 +8,11 @@ at import time; see `_find_library` below for how it's located.
 Two independent APIs are exposed, mirroring `rsact-ffi` itself:
 
 - `Terminal` — the flat cell-buffer API (`rsact_create`/`set_cell`/`render`).
-- `Element` + `Tree` — the declarative component-tree API
-  (`rsact_element_*`/`rsact_tree_*`).
+- `text()`/`container()` + `Tree` — the declarative component-tree API
+  (`rsact_element_*`/`rsact_tree_*`). Unlike the raw C API, a tree you
+  build here is just immutable data (`Text`/`Container`) — no owned
+  native handles, no `.free()`, nothing to consume-and-invalidate. The
+  FFI conversion happens once, functionally, inside `Tree.present()`.
 
 As in the C API, don't mix the two on work meant to share a screen: each
 tracks its own independent "what's actually on screen" baseline.
@@ -19,12 +22,23 @@ from __future__ import annotations
 
 import ctypes
 import ctypes.util
+import hashlib
+import io
 import os
 import platform
+import tarfile
+import urllib.request
+import zipfile
+from dataclasses import dataclass, field
+from typing import Iterable, Union
 
 __all__ = [
     "Terminal",
-    "Element",
+    "Text",
+    "Container",
+    "Node",
+    "text",
+    "container",
     "Tree",
     "KeyEvent",
     "terminal_size",
@@ -54,14 +68,105 @@ RSACT_KEY_BACKSPACE = 7
 RSACT_KEY_CTRL_BASE = 0x100
 
 
+# The version and per-platform archive hashes examples/c/CMakeLists.txt
+# also pins (RSACT_VERSION/RSACT_ARCHIVE_SHA256) — bump both together on
+# every release. (system, machine) -> (target triple, archive extension,
+# archive SHA256).
+_RSACT_VERSION = "v0.2.0"
+_RELEASE_TARGETS: dict[tuple[str, str], tuple[str, str, str]] = {
+    ("Linux", "x86_64"): (
+        "x86_64-unknown-linux-gnu",
+        "tar.gz",
+        "ed588de9eaec01c0e8784bb3fd3941b5ff55b393bbd92c8e97069eb8f51b06f7",
+    ),
+    ("Darwin", "arm64"): (
+        "aarch64-apple-darwin",
+        "tar.gz",
+        "6f1c0d6f7ec1fa0d7d98217d8d724b7dfd4ff0737a243ac78cd5ef98f4112115",
+    ),
+    ("Darwin", "aarch64"): (
+        "aarch64-apple-darwin",
+        "tar.gz",
+        "6f1c0d6f7ec1fa0d7d98217d8d724b7dfd4ff0737a243ac78cd5ef98f4112115",
+    ),
+    ("Windows", "AMD64"): (
+        "x86_64-pc-windows-msvc",
+        "zip",
+        "e37363e9644411cf0c966a6f5af9e2c028d4fcdda821bba1c653ec30a6d09c81",
+    ),
+}
+
+
+def _download_release_library(lib_name: str) -> str:
+    """Last resort: downloads the prebuilt archive for this platform from
+    the pinned GitHub Release (same URL/hash scheme
+    `examples/c/CMakeLists.txt` uses), verifies its SHA256, and extracts
+    just the shared library into a local cache — so someone with no Rust
+    toolchain at all can still `import rsact`. Cached, so this only
+    touches the network once per version/platform.
+    """
+    key = (platform.system(), platform.machine())
+    entry = _RELEASE_TARGETS.get(key)
+    if entry is None:
+        raise RuntimeError(
+            f"rsact: no prebuilt release published for {key[0]}/{key[1]}. "
+            "Build rsact-ffi from source (`cargo build --release -p "
+            "rsact-ffi`) and set RSACT_FFI_LIB to the result instead."
+        )
+    target, ext, expected_sha256 = entry
+
+    cache_dir = os.path.join(os.path.expanduser("~"), ".cache", "rsact", _RSACT_VERSION, target)
+    cached = os.path.join(cache_dir, lib_name)
+    if os.path.exists(cached):
+        return cached
+
+    url = f"https://github.com/MovingJu/Rsact/releases/download/{_RSACT_VERSION}/rsact-{target}.{ext}"
+    with urllib.request.urlopen(url) as response:  # noqa: S310 (fixed https:// URL, checksum verified below)
+        archive_bytes = response.read()
+
+    digest = hashlib.sha256(archive_bytes).hexdigest()
+    if digest != expected_sha256:
+        raise RuntimeError(
+            f"rsact: checksum mismatch downloading {url} "
+            f"(got {digest}, expected {expected_sha256}) — refusing to load it."
+        )
+
+    member_path = f"rsact-{target}/lib/{lib_name}"
+    buf = io.BytesIO(archive_bytes)
+    try:
+        if ext == "zip":
+            with zipfile.ZipFile(buf) as archive:
+                data = archive.read(member_path)
+        else:
+            with tarfile.open(fileobj=buf, mode="r:gz") as archive:
+                member = archive.getmember(member_path)
+                extracted = archive.extractfile(member)
+                assert extracted is not None
+                data = extracted.read()
+    except KeyError as exc:
+        raise RuntimeError(
+            f"rsact: {url} doesn't contain {member_path} — this release "
+            "predates prebuilt shared libraries; build rsact-ffi from "
+            "source instead, or use a newer release."
+        ) from exc
+
+    os.makedirs(cache_dir, exist_ok=True)
+    with open(cached, "wb") as f:
+        f.write(data)
+    return cached
+
+
 def _find_library() -> str:
     """Locates the `rsact_ffi` shared library.
 
     Checks, in order: the `RSACT_FFI_LIB` environment variable (an exact
     path); `target/release/<libname>` relative to the repo root (for
     running straight out of a checkout after `cargo build --release -p
-    rsact-ffi`); then the system library search path via
-    `ctypes.util.find_library`.
+    rsact-ffi`); the system library search path via
+    `ctypes.util.find_library`; and finally, as a last resort, downloads
+    the prebuilt shared library for this platform from the matching
+    GitHub Release (see `_download_release_library`) — the path that
+    needs no local Rust toolchain at all.
     """
     override = os.environ.get("RSACT_FFI_LIB")
     if override:
@@ -78,7 +183,9 @@ def _find_library() -> str:
         raise RuntimeError(f"rsact: unsupported platform {system!r}")
 
     here = os.path.dirname(os.path.abspath(__file__))
-    dev_candidate = os.path.normpath(os.path.join(here, "..", "..", "target", "release", name))
+    dev_candidate = os.path.normpath(
+        os.path.join(here, "..", "..", "..", "..", "target", "release", name)
+    )
     if os.path.exists(dev_candidate):
         return dev_candidate
 
@@ -86,11 +193,7 @@ def _find_library() -> str:
     if found:
         return found
 
-    raise RuntimeError(
-        "rsact: could not locate the rsact-ffi shared library. Build it "
-        "with `cargo build --release -p rsact-ffi` from the repo root, "
-        "or set the RSACT_FFI_LIB environment variable to its path."
-    )
+    return _download_release_library(name)
 
 
 _lib = ctypes.CDLL(_find_library())
@@ -278,80 +381,120 @@ class Terminal:
         self.close()
 
 
-class Element:
-    """An owned, unattached element tree, built by `Element.text`/
-    `Element.container`. Passing one as a child to `Element.container`,
-    or to `Tree.present`, transfers ownership — the `Element` object
-    becomes inert afterward. An `Element` you built but never attached
-    anywhere must be freed with `.free()`."""
+@dataclass(frozen=True)
+class Text:
+    """A single-line text leaf. Immutable, plain data — build one with
+    `text()`, not directly. See the module docstring: this is the whole
+    point of the functional redesign — a `Node` is just a value, freely
+    composable, comparable, and reusable, with no native resource behind
+    it until `Tree.present()` compiles it."""
 
-    __slots__ = ("_ptr",)
+    key: str
+    content: str
+    width: int = 0
+    fg: int = 0xFFFFFF
+    bg: int = 0x000000
+    bold: bool = False
+    underline: bool = False
+    reverse: bool = False
 
-    def __init__(self, ptr: int):
-        self._ptr = ptr
 
-    @staticmethod
-    def text(
-        key: str,
-        content: str,
-        width: int = 0,
-        fg: int = 0xFFFFFF,
-        bg: int = 0x000000,
-        bold: bool = False,
-        underline: bool = False,
-        reverse: bool = False,
-    ) -> "Element":
-        """A single-line text leaf, width and style set up front."""
+@dataclass(frozen=True)
+class Container:
+    """A container stacking `children` along `layout`'s axis
+    (`RSACT_LAYOUT_VERTICAL`/`_HORIZONTAL`). Immutable, plain data — build
+    one with `container()`, not directly. See `Text`."""
+
+    key: str
+    layout: int
+    children: tuple["Node", ...] = field(default_factory=tuple)
+    width: int = 0
+    height: int = 0
+
+
+Node = Union[Text, Container]
+
+
+def text(
+    key: str,
+    content: str,
+    width: int = 0,
+    fg: int = 0xFFFFFF,
+    bg: int = 0x000000,
+    bold: bool = False,
+    underline: bool = False,
+    reverse: bool = False,
+) -> Text:
+    """Builds a `Text` leaf."""
+    return Text(key, content, width, fg, bg, bold, underline, reverse)
+
+
+def container(
+    key: str,
+    layout: int,
+    children: Iterable[Node] = (),
+    width: int = 0,
+    height: int = 0,
+) -> Container:
+    """Builds a `Container`, stacking `children` (any iterable of `Node` —
+    a list, a generator, another `container()` call, ...) along `layout`'s
+    axis."""
+    return Container(key, layout, tuple(children), width, height)
+
+
+def _compile(node: Node) -> int:
+    """Converts a `Node` tree into native `RsactElement*` pointers with
+    one bottom-up walk, handing each child straight into its parent as
+    soon as it's built — the only place ownership of a native element
+    pointer is ever visible is right here, never in application code."""
+    if isinstance(node, Text):
         ptr = _lib.rsact_element_text(
-            key.encode("utf-8"),
-            content.encode("utf-8"),
-            width,
-            fg,
-            bg,
-            _attrs(bold, underline, reverse),
+            node.key.encode("utf-8"),
+            node.content.encode("utf-8"),
+            node.width,
+            node.fg,
+            node.bg,
+            _attrs(node.bold, node.underline, node.reverse),
         )
         if not ptr:
-            raise ValueError("rsact_element_text failed (bad key/content?)")
-        return Element(ptr)
+            raise ValueError(f"rsact_element_text failed for key={node.key!r}")
+        return ptr
 
-    @staticmethod
-    def container(
-        key: str,
-        layout: int,
-        children,
-        width: int = 0,
-        height: int = 0,
-    ) -> "Element":
-        """A container stacking `children` (any iterable of `Element`)
-        along `layout`'s axis (`RSACT_LAYOUT_VERTICAL`/`_HORIZONTAL`).
-        Always consumes every child, whether or not this call succeeds —
-        don't reuse them afterward."""
-        children = list(children)
-        arr = (ctypes.c_void_p * len(children))(*(c._ptr for c in children))
-        for child in children:
-            child._ptr = None  # always consumed, per rsact_element_container's contract
+    if isinstance(node, Container):
+        child_ptrs: list[int] = []
+        try:
+            for child in node.children:
+                child_ptrs.append(_compile(child))
+        except Exception:
+            # A later sibling failed to compile; the ones already built
+            # were never handed to rsact_element_container, so nothing
+            # else owns them yet — free them ourselves instead of leaking.
+            for ptr in child_ptrs:
+                _lib.rsact_element_free(ptr)
+            raise
+
+        arr = (ctypes.c_void_p * len(child_ptrs))(*child_ptrs)
         ptr = _lib.rsact_element_container(
-            key.encode("utf-8"), layout, width, height, arr, len(children)
+            node.key.encode("utf-8"), node.layout, node.width, node.height, arr, len(child_ptrs)
         )
         if not ptr:
-            raise ValueError("rsact_element_container failed (bad key/layout, or a null child)?")
-        return Element(ptr)
+            # rsact_element_container already consumed (freed) every
+            # child_ptrs entry internally, win or lose, so there's
+            # nothing left for us to clean up here.
+            raise ValueError(f"rsact_element_container failed for key={node.key!r}")
+        return ptr
 
-    def free(self) -> None:
-        """Frees this element tree. Only call this on an `Element` you
-        built but never attached to a container or presented."""
-        if self._ptr:
-            _lib.rsact_element_free(self._ptr)
-            self._ptr = None
+    raise TypeError(f"not a rsact.Text/rsact.Container node: {node!r}")
 
 
 class Tree:
-    """The component-tree API: build a fresh `Element` tree every frame
-    and call `present`, which reconciles it against the previous frame
-    and draws only what changed.
+    """The component-tree API: build a fresh `Node` tree every frame (a
+    plain, immutable value — see `text()`/`container()`) and call
+    `present`, which compiles it to native elements, reconciles it
+    against the previous frame, and draws only what changed.
 
     >>> with Tree(20, 1) as tree:  # doctest: +SKIP
-    ...     tree.present(Element.text("greeting", "hi", width=10))
+    ...     tree.present(text("greeting", "hi", width=10))
     """
 
     def __init__(self, width: int, height: int):
@@ -360,11 +503,10 @@ class Tree:
             raise RuntimeError("rsact_tree_create failed (not a real terminal?)")
         self._handle = handle
 
-    def present(self, element: Element) -> None:
-        """Replaces the tree's root with `element` (consuming it,
-        regardless of outcome) and draws the result."""
-        ptr = element._ptr
-        element._ptr = None
+    def present(self, root: Node) -> None:
+        """Compiles `root` to native elements, replaces the tree's root
+        with the result, and draws it."""
+        ptr = _compile(root)
         rc = _lib.rsact_tree_present(self._handle, ptr)
         if rc != 0:
             raise OSError(f"rsact_tree_present failed (rc={rc})")
