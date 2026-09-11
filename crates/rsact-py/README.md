@@ -34,6 +34,14 @@ Regenerate it after changing any public class/function signature or doc comment,
 
 Mirrors the `ctypes` binding's design (see its README for the full walkthrough) with one difference worth calling out: there's no `with`/context-manager here. `Terminal`/`Tree` hold a `RawModeGuard` (from `rsact-core`), and Rust's own `Drop` on it runs automatically when the Python object is garbage-collected — restoring the terminal needs no explicit `close()` or `with` block, so a real, long-running TUI script doesn't have to nest its whole body one indent level deeper just to get that. `close()` still exists for when you want the terminal restored at a specific point instead of whenever GC gets to it.
 
+## Publishing to PyPI
+
+`pyo3 = { features = ["abi3-py310"] }` (see `Cargo.toml`) means one wheel per platform covers every Python 3.10+ interpreter — no per-minor-version build matrix.
+
+[`.github/workflows/python-release.yml`](https://github.com/MovingJu/Rsact/blob/main/.github/workflows/python-release.yml) builds that wheel for Linux (manylinux, via `PyO3/maturin-action`'s `manylinux: auto`), macOS, and Windows, gated behind the same `Tag Version Check` workflow as `release.yml`, and publishes them with [`pypa/gh-action-pypi-publish`](https://github.com/pypa/gh-action-pypi-publish) using **Trusted Publishing** (OIDC — `id-token: write`, no stored API token/secret).
+
+Trusted Publishing needs one manual, one-time setup step on pypi.org that CI can't do for you: register a "pending publisher" for the `rsact` project — PyPI project name `rsact`, owner/repo `MovingJu/Rsact`, workflow filename `python-release.yml`, environment name `pypi` (matching the `environment:` key in that workflow). Do this *before* the first tag push that should publish; after that first successful publish, PyPI links the project to the workflow automatically and no further manual step is needed for subsequent releases.
+
 ## License
 
 [MIT](https://github.com/MovingJu/Rsact/blob/main/LICENSE) © [MovingJu](https://github.com/MovingJu) — same as the rest of the workspace.

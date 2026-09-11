@@ -9,11 +9,11 @@ Runnable examples that use this package live separately, under [`examples/python
 Not on PyPI yet, but already a real installable package — `pip`/`uv` can pull it straight from this repo, same as any other git-hosted Python package. You don't need a clone of this repo for this, or anything after it:
 
 ```sh
-uv add "rsact @ git+https://github.com/MovingJu/Rsact.git#subdirectory=crates/rsact-ffi/python"
+uv add "rsact-ctypes @ git+https://github.com/MovingJu/Rsact.git#subdirectory=crates/rsact-ffi/python"
 # or: pip install "git+https://github.com/MovingJu/Rsact.git#subdirectory=crates/rsact-ffi/python"
 ```
 
-Once #24 lands, that becomes `uv add rsact` / `pip install rsact` — nothing about the API or this install shape changes, just the source `uv`/`pip` fetch it from.
+Once #24 lands, that becomes `uv add rsact-ctypes` / `pip install rsact-ctypes` — nothing about the API or this install shape changes, just the source `uv`/`pip` fetch it from. (Not `rsact`: that PyPI name belongs to [`rsact-py`](https://github.com/MovingJu/Rsact/tree/main/crates/rsact-py), the native PyO3 binding — see its README's [Publishing to PyPI](https://github.com/MovingJu/Rsact/blob/main/crates/rsact-py/README.md#publishing-to-pypi) section. `import rsact` still works either way; only the PyPI package name differs.)
 
 `import rsact` needs the native `rsact_ffi` **shared** library too (the *static* lib the CMake C examples use won't load via `ctypes`). It finds one automatically, checked in this order:
 

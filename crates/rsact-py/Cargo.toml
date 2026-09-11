@@ -21,7 +21,13 @@ path = "src/bin/stub_gen.rs"
 
 [dependencies]
 rsact-core = { path = "../rsact-core", version = "0.2.0" }
-pyo3 = "0.29.2"
+# abi3-py310: build against the stable ABI floor set by pyproject.toml's
+# requires-python (>=3.10) so CI produces one wheel per platform instead of
+# one per Python minor version. Floor can't go lower than py310: pyo3-stub-gen
+# 0.23.0 unconditionally references pyo3's PyEncodingWarning, which pyo3 only
+# defines under #[cfg(Py_3_10)] — abi3-py39 leaves that cfg unset and fails to
+# compile. Python 3.9 itself is EOL (Oct 2025) anyway.
+pyo3 = { version = "0.29.2", features = ["abi3-py310"] }
 pyo3-stub-gen = "0.23.0"
 
 [build-dependencies]

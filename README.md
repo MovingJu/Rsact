@@ -157,7 +157,7 @@ The full C ABI surface is in [`crates/rsact-ffi/include/rsact.h`](https://github
 [`crates/rsact-ffi/python`](crates/rsact-ffi/python) is a pure-`ctypes` wrapper around the same C ABI — that crate's Python binding, the same way `crates/rsact-ffi/examples` holds its Rust ones. No compiled extension of its own, and not on PyPI yet (tracked in [#24](https://github.com/MovingJu/Rsact/issues/24)), but already installable straight from this repo — no clone needed, same as any git-hosted Python package:
 
 ```sh
-uv add "rsact @ git+https://github.com/MovingJu/Rsact.git#subdirectory=crates/rsact-ffi/python"
+uv add "rsact-ctypes @ git+https://github.com/MovingJu/Rsact.git#subdirectory=crates/rsact-ffi/python"
 ```
 
 `import rsact` finds the native shared library itself — a local `cargo build --release -p rsact-ffi` if you happen to be developing inside a checkout, or (from a release built after this landed) auto-downloaded and SHA256-verified from the matching GitHub Release, so a plain installed-package user needs no Rust toolchain and no Rsact checkout at all.
