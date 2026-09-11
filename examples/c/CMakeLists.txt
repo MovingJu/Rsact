@@ -10,22 +10,22 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # instead of building the Rust workspace via Corrosion/cargo. Only the
 # platforms Rsact's release workflow publishes are supported here.
 # ---------------------------------------------------------------------------
-set(RSACT_VERSION "v0.1.2")
+set(RSACT_VERSION "v0.2.0")
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64)$")
     set(RSACT_TARGET "x86_64-unknown-linux-gnu")
     set(RSACT_ARCHIVE_EXT "tar.gz")
-    set(RSACT_ARCHIVE_SHA256 "0d23369f716d4c6ea7f855439789421f69bac128995644466cf7449c49c49b50")
+    set(RSACT_ARCHIVE_SHA256 "ed588de9eaec01c0e8784bb3fd3941b5ff55b393bbd92c8e97069eb8f51b06f7")
     set(RSACT_LIB_NAME "librsact_ffi.a")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$")
     set(RSACT_TARGET "aarch64-apple-darwin")
     set(RSACT_ARCHIVE_EXT "tar.gz")
-    set(RSACT_ARCHIVE_SHA256 "b619abb0fcec0f47dc50a421edd390de6e7ed5df99946ccb1487892159a41caa")
+    set(RSACT_ARCHIVE_SHA256 "6f1c0d6f7ec1fa0d7d98217d8d724b7dfd4ff0737a243ac78cd5ef98f4112115")
     set(RSACT_LIB_NAME "librsact_ffi.a")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(AMD64|x86_64)$")
     set(RSACT_TARGET "x86_64-pc-windows-msvc")
     set(RSACT_ARCHIVE_EXT "zip")
-    set(RSACT_ARCHIVE_SHA256 "50b98f8e69204eb9ed49eefcf399769f9fcdc89bdf553f1a9229aa898cc43cf6")
+    set(RSACT_ARCHIVE_SHA256 "e37363e9644411cf0c966a6f5af9e2c028d4fcdda821bba1c653ec30a6d09c81")
     set(RSACT_LIB_NAME "rsact_ffi.lib")
 else()
     message(FATAL_ERROR
@@ -75,3 +75,6 @@ target_link_libraries(basic-bin PRIVATE rsact::rsact_ffi)
 
 add_executable(input-bin src/input.c)
 target_link_libraries(input-bin PRIVATE rsact::rsact_ffi)
+
+add_executable(tree-bin src/tree.c)
+target_link_libraries(tree-bin PRIVATE rsact::rsact_ffi)

@@ -49,7 +49,7 @@ Rsact/
 │   │                       # + component · element · tree (the v0.2.0 component-tree layer)
 │   ├── rsact-demo/        # rsact-core-only demo (animated rectangle + a Dashboard/Counter component tree)
 │   └── rsact-ffi/         # C ABI; build.rs generates include/rsact.h via cbindgen
-├── examples/c/             # 3 C examples (src/) linking a prebuilt rsact-ffi release via CMake FetchContent
+├── examples/c/             # 4 C examples (src/) linking a prebuilt rsact-ffi release via CMake FetchContent
 ├── .github/workflows/      # PR title & commit message convention checks
 ├── CONTRIBUTING.md
 └── LICENSE (MIT)
@@ -252,8 +252,7 @@ A deeper concepts walkthrough with a nested-tree diagram lives on the [Component
 | `cargo run --example basic -p rsact-ffi` | A single static frame (a horizontal line on row 0), then exits |
 | `cargo run --example animate -p rsact-ffi` | A `#` character moving across row 5 (~16ms/frame) |
 | `cargo run --example tree -p rsact-ffi` | A two-counter `Dashboard`, built purely through the C-style `rsact_element_*`/`rsact_tree_*` API |
-| `examples/c/src/basic.c` · `animate.c` · `input.c` | The same two examples, plus key-input polling, reproduced in plain C against `rsact-ffi`'s header. [`examples/c/CMakeLists.txt`](https://github.com/MovingJu/Rsact/blob/main/examples/c/CMakeLists.txt) builds all three against a prebuilt `rsact-ffi` downloaded from the matching GitHub Release |
-| `examples/c/src/tree.c` | The same `Dashboard` as `examples/tree.rs`, in plain C. Written, and compiles/links/runs against a locally-built `rsact-ffi`, but **not yet wired into `CMakeLists.txt`** — `examples/c` links a prebuilt release binary that predates these functions; it'll be added as a CMake target once a release ships them |
+| `examples/c/src/basic.c` · `animate.c` · `input.c` · `tree.c` | The same examples (plus key-input polling, plus the `Dashboard` component tree), reproduced in plain C against `rsact-ffi`'s header. [`examples/c/CMakeLists.txt`](https://github.com/MovingJu/Rsact/blob/main/examples/c/CMakeLists.txt) builds all four against a prebuilt `rsact-ffi` downloaded from the matching GitHub Release |
 
 ## Development
 
