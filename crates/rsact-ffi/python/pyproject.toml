@@ -1,0 +1,18 @@
+[project]
+# PyPI distribution name — deliberately not "rsact": crates/rsact-py (the
+# PyO3 binding) claims that name once #24 publishes. The importable module
+# stays `rsact` either way (see [tool.hatch.build.targets.wheel] below) —
+# `pip install rsact-ctypes` still gives you `import rsact`, same as e.g.
+# `pip install beautifulsoup4` gives you `import bs4`.
+name = "rsact-ctypes"
+version = "0.2.0"
+description = "ctypes bindings for rsact-ffi's C ABI"
+requires-python = ">=3.9"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rsact"]

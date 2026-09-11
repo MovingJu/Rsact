@@ -1,0 +1,73 @@
+name: Publish Python package
+
+# Same gate as release.yml: only runs after "Tag Version Check" passes on a
+# tag push (see tag-version.yml). rsact-py is excluded from the root
+# [workspace] (see Cargo.toml) and versioned by hand, so it isn't covered by
+# that version-match check — keep crates/rsact-py/Cargo.toml's `version` and
+# crates/rsact-py/pyproject.toml's `version` in sync with the workspace by
+# hand when bumping.
+on:
+  workflow_run:
+    workflows: ["Tag Version Check"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  build-wheels:
+    if: github.event.workflow_run.conclusion == 'success'
+    name: Build wheel (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      # `abi3-py310` (see crates/rsact-py/Cargo.toml) means this one wheel
+      # per platform covers every Python 3.10+ interpreter — no version
+      # matrix needed. `manylinux: auto` builds the Linux wheel inside the
+      # matching manylinux container so PyPI accepts the upload (a plain
+      # linux_x86_64-tagged wheel is rejected).
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: auto
+          args: --release --out dist -m crates/rsact-py/Cargo.toml
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.target }}
+          path: dist/*.whl
+
+  publish:
+    name: Publish to PyPI
+    needs: build-wheels
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      # OIDC Trusted Publishing — no stored API token. Requires a one-time
+      # "pending publisher" registration on pypi.org for this repo/workflow
+      # (see crates/rsact-py/README.md).
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: wheels-*
+          merge-multiple: true
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist

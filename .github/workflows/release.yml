@@ -35,19 +35,39 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Build rsact-ffi (release, staticlib)
+      # crate-type = ["cdylib", "staticlib", "lib"] in rsact-ffi's Cargo.toml
+      # means this one build already produces both the static lib the CMake
+      # C examples link (librsact_ffi.a/rsact_ffi.lib) and the shared lib
+      # ctypes-based bindings (examples/python) need (librsact_ffi.so/.dylib/
+      # rsact_ffi.dll) -- both get packaged into the same per-target archive
+      # below, so there's one release asset per platform either consumer
+      # downloads from.
+      - name: Build rsact-ffi (release, staticlib + cdylib)
         run: cargo build --release -p rsact-ffi --target ${{ matrix.target }}
 
       # cbindgen (run by rsact-ffi's build.rs) writes to crates/rsact-ffi/include/rsact.h
       # regardless of target, so every archive below carries a header that
       # matches the ABI it was built with.
-      - name: Package archive (unix)
-        if: runner.os != 'Windows'
+      - name: Package archive (linux)
+        if: runner.os == 'Linux'
         shell: bash
         run: |
           stage="rsact-${{ matrix.target }}"
           mkdir -p "$stage/lib" "$stage/include"
           cp "target/${{ matrix.target }}/release/librsact_ffi.a" "$stage/lib/"
+          cp "target/${{ matrix.target }}/release/librsact_ffi.so" "$stage/lib/"
+          cp crates/rsact-ffi/include/rsact.h "$stage/include/"
+          tar czf "$stage.tar.gz" "$stage"
+          sha256sum "$stage.tar.gz" > "$stage.tar.gz.sha256"
+
+      - name: Package archive (macos)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          stage="rsact-${{ matrix.target }}"
+          mkdir -p "$stage/lib" "$stage/include"
+          cp "target/${{ matrix.target }}/release/librsact_ffi.a" "$stage/lib/"
+          cp "target/${{ matrix.target }}/release/librsact_ffi.dylib" "$stage/lib/"
           cp crates/rsact-ffi/include/rsact.h "$stage/include/"
           tar czf "$stage.tar.gz" "$stage"
           sha256sum "$stage.tar.gz" > "$stage.tar.gz.sha256"
@@ -59,6 +79,7 @@ jobs:
           $stage = "rsact-${{ matrix.target }}"
           New-Item -ItemType Directory -Force -Path "$stage/lib", "$stage/include" | Out-Null
           Copy-Item "target/${{ matrix.target }}/release/rsact_ffi.lib" "$stage/lib/"
+          Copy-Item "target/${{ matrix.target }}/release/rsact_ffi.dll" "$stage/lib/"
           Copy-Item "crates/rsact-ffi/include/rsact.h" "$stage/include/"
           Compress-Archive -Path $stage -DestinationPath "$stage.zip"
           (Get-FileHash "$stage.zip" -Algorithm SHA256).Hash.ToLower() + "  $stage.zip" `
