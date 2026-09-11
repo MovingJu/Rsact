@@ -53,16 +53,12 @@ struct Counter {
 
 impl Component for Counter {
     fn render(&self) -> Element {
-        Element::container(
-            self.label,
-            Layout::Vertical,
-            vec![
-                Element::text("label", self.label).width(20),
-                Element::text("value", self.count.to_string()).width(20),
-            ],
+        view!(
+            container(self.label, Layout::Vertical, width = 20, height = 2) {
+                text("label", self.label, width = 20),
+                text("value", self.count.to_string(), width = 20),
+            }
         )
-        .width(20)
-        .height(2)
     }
 }
 
@@ -75,13 +71,12 @@ struct Dashboard {
 
 impl Component for Dashboard {
     fn render(&self) -> Element {
-        Element::container(
-            "dashboard",
-            Layout::Horizontal,
-            vec![self.left.render(), self.right.render()],
+        view!(
+            container("dashboard", Layout::Horizontal, width = 40, height = 2) {
+                self.left.render(),
+                self.right.render(),
+            }
         )
-        .width(40)
-        .height(2)
     }
 }
 

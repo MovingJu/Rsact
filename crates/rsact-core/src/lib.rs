@@ -9,6 +9,7 @@ pub mod input;
 pub mod renderer;
 pub mod term;
 pub mod tree;
+pub mod view;
 
 #[cfg(unix)]
 mod term_unix;
