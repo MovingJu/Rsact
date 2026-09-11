@@ -39,7 +39,7 @@ This repository is a Cargo workspace with three crates:
 |---|---|---|
 | [`rsact-core`](https://github.com/MovingJu/Rsact/tree/main/crates/rsact-core) | lib | The virtual terminal buffer, diffing, renderer, raw mode, and input parser. The heart of the project |
 | [`rsact-demo`](https://github.com/MovingJu/Rsact/tree/main/crates/rsact-demo) | bin (`publish = false`) | An example built on `rsact-core` alone — animates a growing rectangle |
-| [`rsact-ffi`](https://github.com/MovingJu/Rsact/tree/main/crates/rsact-ffi) | cdylib/staticlib/lib | A C ABI wrapper around `rsact-core`: a handle-based API plus a `cbindgen`-generated header |
+| [`rsact-ffi`](https://github.com/MovingJu/Rsact/tree/main/crates/rsact-ffi) | cdylib/staticlib/lib | A C ABI wrapper around `rsact-core`: a `rsact_create` handle for the flat buffer (`rsact_set_cell`/`rsact_render`) and a distinct `rsact_tree_create` handle for the component tree (`rsact_element_*`/`rsact_tree_*`) — separate types on purpose, so the C compiler rejects passing one where the other is expected — plus a `cbindgen`-generated header |
 
 ```text
 Rsact/
@@ -238,7 +238,9 @@ A deeper concepts walkthrough with a nested-tree diagram lives on the [Component
 | `cargo run -p rsact-demo` | An animated growing rectangle, then a `Dashboard` of two nested `Counter` components driven through `Tree::present` |
 | `cargo run --example basic -p rsact-ffi` | A single static frame (a horizontal line on row 0), then exits |
 | `cargo run --example animate -p rsact-ffi` | A `#` character moving across row 5 (~16ms/frame) |
+| `cargo run --example tree -p rsact-ffi` | A two-counter `Dashboard`, built purely through the C-style `rsact_element_*`/`rsact_tree_*` API |
 | `examples/c/src/basic.c` · `animate.c` · `input.c` | The same two examples, plus key-input polling, reproduced in plain C against `rsact-ffi`'s header. [`examples/c/CMakeLists.txt`](https://github.com/MovingJu/Rsact/blob/main/examples/c/CMakeLists.txt) builds all three against a prebuilt `rsact-ffi` downloaded from the matching GitHub Release |
+| `examples/c/src/tree.c` | The same `Dashboard` as `examples/tree.rs`, in plain C. Written, and compiles/links/runs against a locally-built `rsact-ffi`, but **not yet wired into `CMakeLists.txt`** — `examples/c` links a prebuilt release binary that predates these functions; it'll be added as a CMake target once a release ships them |
 
 ## Development
 
