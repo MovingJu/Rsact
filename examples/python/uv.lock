@@ -5,4 +5,15 @@ requires-python = ">=3.9"
 [[package]]
 name = "rsact"
 version = "0.2.0"
-source = { editable = "." }
+source = { editable = "../../crates/rsact-ffi/python" }
+
+[[package]]
+name = "rsact-examples"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "rsact" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "rsact", editable = "../../crates/rsact-ffi/python" }]

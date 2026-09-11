@@ -1,13 +1,17 @@
 [project]
-name = "rsact"
-version = "0.2.0"
-description = "ctypes bindings for rsact-ffi's C ABI"
+name = "rsact-examples"
+version = "0.1.0"
+description = "Example scripts against the rsact Python bindings"
 requires-python = ">=3.9"
-dependencies = []
+dependencies = ["rsact"]
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/rsact"]
+# `rsact` above is a normal dependency specifier, same as any project that
+# consumes the package would write. This override only applies when uv
+# runs *from inside this repo* — it resolves that dependency to the local,
+# editable crates/rsact-ffi/python instead of fetching it, purely so
+# `uv run` here iterates fast without a network round-trip. An external
+# consumer's own pyproject.toml has no such override; see
+# crates/rsact-ffi/python/README.md for how they'd actually install it
+# (a git+subdirectory URL today, plain `rsact` once #24 publishes to PyPI).
+[tool.uv.sources]
+rsact = { path = "../../crates/rsact-ffi/python", editable = true }
