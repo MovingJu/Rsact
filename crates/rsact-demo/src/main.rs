@@ -28,7 +28,14 @@ fn main() {
     std::thread::sleep(core::time::Duration::from_millis(500));
 
     for i in 1..8 {
-        rectangle(&mut virtual_dom, 5 * i, 10 * i);
+        // Clamp to the actual terminal size: `Buffer` stays sized to
+        // `terminal.row`×`terminal.col` for the whole demo, but this loop's
+        // requested rectangle grows past that (up to 35×70) regardless of
+        // how big the terminal actually is — without clamping, `set` panics
+        // on any terminal smaller than that.
+        let row = (5 * i).min(terminal.row);
+        let col = (10 * i).min(terminal.col);
+        rectangle(&mut virtual_dom, row, col);
 
         let differences = diff::diff(&real_dom, &virtual_dom);
         rend.draw(&differences).expect("Failed stdout");
@@ -53,16 +60,12 @@ struct Counter {
 
 impl Component for Counter {
     fn render(&self) -> Element {
-        Element::container(
-            self.label,
-            Layout::Vertical,
-            vec![
-                Element::text("label", self.label).width(20),
-                Element::text("value", self.count.to_string()).width(20),
-            ],
+        view!(
+            container(self.label, Layout::Vertical, width = 20, height = 2) {
+                text("label", self.label, width = 20),
+                text("value", self.count.to_string(), width = 20),
+            }
         )
-        .width(20)
-        .height(2)
     }
 }
 
@@ -75,13 +78,12 @@ struct Dashboard {
 
 impl Component for Dashboard {
     fn render(&self) -> Element {
-        Element::container(
-            "dashboard",
-            Layout::Horizontal,
-            vec![self.left.render(), self.right.render()],
+        view!(
+            container("dashboard", Layout::Horizontal, width = 40, height = 2) {
+                self.left.render(),
+                self.right.render(),
+            }
         )
-        .width(40)
-        .height(2)
     }
 }
 

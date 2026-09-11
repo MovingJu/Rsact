@@ -19,6 +19,7 @@ You draw the state you want into a virtual buffer — a grid of cells, each a ch
 - **Cursor restored on exit** — `RawModeGuard::enable_safe_exit` moves the cursor to the terminal's last row/col and emits a trailing newline on `Drop`.
 - **UTF-8-aware input parser** — arrow keys, Ctrl+letter, Backspace/Enter/Esc, and multi-byte UTF-8 characters all decode correctly from a single `read_key()` call.
 - **Declarative component tree** — describe the screen as a tree of `Component`s (`component`/`element`/`tree` modules); `Tree` reconciles consecutive frames by `Key` and repaints only what changed. See [Component tree](#component-tree) below.
+- **`view!` macro** — a `macro_rules!` DSL for building `Element` trees (no proc-macro, no new dependency) that reads as the shape it produces instead of `vec![]`/builder-chain noise.
 
 ## Quick start
 
@@ -72,22 +73,18 @@ real_dom = virtual_dom.clone()   commit as the baseline for the next diff
 On top of that flat-buffer pipeline, this crate also has a declarative layer: describe the screen as a tree of `Component`s, and let `Tree` figure out which cells actually need repainting between frames.
 
 ```rust,no_run
-use rsact_core::{component::Component, element::{Element, Layout}, renderer::Renderer, tree::Tree};
+use rsact_core::{component::Component, element::{Element, Layout}, renderer::Renderer, tree::Tree, view};
 
 struct Counter { label: &'static str, count: u32 }
 
 impl Component for Counter {
     fn render(&self) -> Element {
-        Element::container(
-            self.label,
-            Layout::Vertical,
-            vec![
-                Element::text("label", self.label).width(20),
-                Element::text("value", self.count.to_string()).width(20),
-            ],
+        view!(
+            container(self.label, Layout::Vertical, width = 20, height = 2) {
+                text("label", self.label, width = 20),
+                text("value", self.count.to_string(), width = 20),
+            }
         )
-        .width(20)
-        .height(2)
     }
 }
 

@@ -29,7 +29,7 @@ You draw the state you want into a virtual buffer — a grid of cells, each a ch
 - **Cursor restored on exit** — `RawModeGuard::enable_safe_exit` moves the cursor to the terminal's last row/col and emits a trailing newline on `Drop`, so the shell prompt doesn't land on top of the last frame ([#4](https://github.com/MovingJu/Rsact/issues/4), fixed in [#5](https://github.com/MovingJu/Rsact/pull/5))
 - **UTF-8-aware input parser** — arrow keys, Ctrl+letter, Backspace/Enter/Esc, and multi-byte UTF-8 characters (Korean syllables, emoji) all decode correctly from a single `read_key()` call
 - **Auto-generated C header** — `rsact-ffi`'s `build.rs` regenerates `include/rsact.h` via `cbindgen` on every build
-- **Declarative component tree** ([v0.2.0](https://github.com/MovingJu/Rsact/issues/2)) — describe the screen as a tree of `Component`s instead of hand-writing `set_cell` calls; `Tree` reconciles consecutive frames by `Key` and repaints only what changed. See the [Component tree](#component-tree) section below.
+- **Declarative component tree** ([v0.2.0](https://github.com/MovingJu/Rsact/issues/2)) — describe the screen as a tree of `Component`s instead of hand-writing `set_cell` calls; `Tree` reconciles consecutive frames by `Key` and repaints only what changed. Built with `view!`, a `macro_rules!` DSL (no proc-macro, no new dependency) that reads as the shape it produces. See the [Component tree](#component-tree) section below.
 
 ## Crate layout
 
@@ -175,22 +175,18 @@ Both `rsact-demo` and `rsact-ffi`'s `rsact_render` follow exactly these five ste
 On top of the flat-buffer pipeline above, v0.2.0 ([#2](https://github.com/MovingJu/Rsact/issues/2)) adds a declarative layer: describe the screen as a tree of `Component`s, and let `Tree` figure out which cells actually need repainting between frames.
 
 ```rust,no_run
-use rsact_core::{component::Component, element::{Element, Layout}, renderer::Renderer, tree::Tree};
+use rsact_core::{component::Component, element::{Element, Layout}, renderer::Renderer, tree::Tree, view};
 
 struct Counter { label: &'static str, count: u32 }
 
 impl Component for Counter {
     fn render(&self) -> Element {
-        Element::container(
-            self.label,
-            Layout::Vertical,
-            vec![
-                Element::text("label", self.label).width(20),
-                Element::text("value", self.count.to_string()).width(20),
-            ],
+        view!(
+            container(self.label, Layout::Vertical, width = 20, height = 2) {
+                text("label", self.label, width = 20),
+                text("value", self.count.to_string(), width = 20),
+            }
         )
-        .width(20)
-        .height(2)
     }
 }
 
@@ -203,6 +199,23 @@ fn main() -> std::io::Result<()> {
         tree.root_mut().count += 1;
     }
     Ok(())
+}
+```
+
+The tree above is built with [`view!`](https://github.com/MovingJu/Rsact/blob/main/crates/rsact-core/src/view.rs) — a `macro_rules!` DSL (no proc-macro, no new dependency) that reads top-to-bottom as the shape it produces instead of burying nesting inside `vec![]`/builder chains. A container's children can mix `text(...)`/`container(...) { ... }` forms with plain expressions that evaluate to an `Element` — that's how a `Dashboard` of two `Counter`s splices in each one's own `render()` output:
+
+```rust,no_run
+struct Dashboard { left: Counter, right: Counter }
+
+impl Component for Dashboard {
+    fn render(&self) -> Element {
+        view!(
+            container("dashboard", Layout::Horizontal, width = 40, height = 2) {
+                self.left.render(),
+                self.right.render(),
+            }
+        )
+    }
 }
 ```
 
