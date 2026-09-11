@@ -50,6 +50,7 @@ Rsact/
 │   ├── rsact-demo/        # rsact-core-only demo (animated rectangle + a Dashboard/Counter component tree)
 │   └── rsact-ffi/         # C ABI; build.rs generates include/rsact.h via cbindgen
 ├── examples/c/             # 4 C examples (src/) linking a prebuilt rsact-ffi release via CMake FetchContent
+├── bindings/python/        # ctypes wrapper around rsact-ffi's C ABI, no compiled extension (see #24)
 ├── .github/workflows/      # PR title & commit message convention checks
 ├── CONTRIBUTING.md
 └── LICENSE (MIT)
@@ -148,6 +149,33 @@ int main(void) {
 ```
 
 The full C ABI surface is in [`crates/rsact-ffi/include/rsact.h`](https://github.com/MovingJu/Rsact/blob/main/crates/rsact-ffi/include/rsact.h) — `rsact_create` / `rsact_terminal_size` / `rsact_set_cell` / `rsact_render` / `rsact_poll_key` / `rsact_destroy`, plus the `RsactKeyEvent` struct and `RSACT_KEY_*` constants.
+
+### Using it from Python
+
+[`bindings/python`](bindings/python) is a pure-`ctypes` wrapper around the same C ABI — no compiled extension, no build step of its own (a real PyPI package via PyO3/maturin is tracked separately in [#24](https://github.com/MovingJu/Rsact/issues/24)). Build the native shared library once, then import it straight from a checkout:
+
+```sh
+cargo build --release -p rsact-ffi   # produces target/release/librsact_ffi.so (.dylib/.dll)
+python3 bindings/python/examples/tree.py
+```
+
+```python
+from rsact import Element, RSACT_LAYOUT_VERTICAL, Tree
+
+with Tree(20, 2) as tree:
+    for count in range(5):
+        tree.present(
+            Element.container(
+                "counter",
+                RSACT_LAYOUT_VERTICAL,
+                [Element.text("label", "left", width=20), Element.text("value", str(count), width=20)],
+                width=20,
+                height=2,
+            )
+        )
+```
+
+See [`bindings/python/README.md`](bindings/python/README.md) for the full API and all three examples (`basic.py`/`animate.py`/`tree.py`, mirroring the Rust/C ones).
 
 ## How it works (the render pipeline)
 
