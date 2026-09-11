@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.1.2"
+version = "0.2.0"
 description = "A React-flavored virtual DOM rendering engine for the terminal."
 edition = "2024"
 license = "MIT"

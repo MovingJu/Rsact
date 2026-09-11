@@ -11,7 +11,7 @@
 
 You draw the state you want into a virtual buffer — a grid of cells, each a character plus a style. `rsact-core` diffs that buffer against the last frame it actually drew, and turns only the cells that changed into the minimal set of ANSI escape sequences needed, sent to the terminal in a **single `write()` call**. It's the same idea React applies to the real DOM, applied to a terminal's cell grid instead.
 
-> This is an actively developed personal project (currently v0.1.2). The API is not yet stable — see the [Roadmap](#roadmap) below.
+> This is an actively developed personal project (currently v0.2.0). The API is not yet stable — see the [Roadmap](#roadmap) below.
 
 ## What is this?
 
