@@ -1,14 +1,16 @@
 # rsact (Python)
 
-A pure-Python [`ctypes`](https://docs.python.org/3/library/ctypes.html) wrapper around [`rsact-ffi`](https://github.com/MovingJu/Rsact/tree/main/crates/rsact-ffi)'s C ABI. No compiled extension of its own — see [#24](https://github.com/MovingJu/Rsact/issues/24) if you're after a real PyPI package (a `rsact-py` crate built with PyO3/maturin); this is the lighter alternative discussed there, useful today without waiting on that.
+A pure-Python [`ctypes`](https://docs.python.org/3/library/ctypes.html) wrapper around [`rsact-ffi`](https://github.com/MovingJu/Rsact/tree/main/crates/rsact-ffi)'s C ABI — this directory is that crate's Python binding, the same way [`../examples`](../examples) holds its Rust ones. No compiled extension of its own — see [#24](https://github.com/MovingJu/Rsact/issues/24) if you're after a real PyPI package (a `rsact-py` crate built with PyO3/maturin); this is the lighter alternative discussed there, useful today without waiting on that.
+
+Runnable examples that use this package live separately, under [`examples/python`](https://github.com/MovingJu/Rsact/tree/main/examples/python) at the repo root — same split as `crates/rsact-ffi` (the library) vs. `examples/c` (a consumer of it).
 
 ## Install
 
-Not on PyPI yet, but already a real installable package — `pip`/`uv` can pull it straight from this repo, same as any other git-hosted Python package. This is the intended way to use it; you don't need a clone of this repo to run the line below, or anything after it:
+Not on PyPI yet, but already a real installable package — `pip`/`uv` can pull it straight from this repo, same as any other git-hosted Python package. You don't need a clone of this repo for this, or anything after it:
 
 ```sh
-uv add "rsact @ git+https://github.com/MovingJu/Rsact.git#subdirectory=examples/python"
-# or: pip install "git+https://github.com/MovingJu/Rsact.git#subdirectory=examples/python"
+uv add "rsact @ git+https://github.com/MovingJu/Rsact.git#subdirectory=crates/rsact-ffi/python"
+# or: pip install "git+https://github.com/MovingJu/Rsact.git#subdirectory=crates/rsact-ffi/python"
 ```
 
 Once #24 lands, that becomes `uv add rsact` / `pip install rsact` — nothing about the API or this install shape changes, just the source `uv`/`pip` fetch it from.
@@ -16,7 +18,7 @@ Once #24 lands, that becomes `uv add rsact` / `pip install rsact` — nothing ab
 `import rsact` needs the native `rsact_ffi` **shared** library too (the *static* lib the CMake C examples use won't load via `ctypes`). It finds one automatically, checked in this order:
 
 1. The `RSACT_FFI_LIB` environment variable, if set (an exact path).
-2. `target/release/<libname>` relative to the repo root, if you happen to be running from inside a checkout with `rsact-ffi` already built — this is what makes `uv run` work for local development (see below), not something an installed-from-git user needs to think about.
+2. `target/release/<libname>` relative to the repo root, if you happen to be running from inside a checkout with `rsact-ffi` already built — this is what makes local development (see below) work, not something an installed-from-git user needs to think about.
 3. The system library search path (if `rsact_ffi` is installed system-wide).
 4. **Downloaded automatically** from the matching [GitHub Release](https://github.com/MovingJu/Rsact/releases), SHA256-verified, and cached under `~/.cache/rsact/` — this is the path a real `pip`/`uv` install actually takes, with **no Rust toolchain and no Rsact checkout involved at all**. (Needs a release built after the shared library started being published; see the note in [What's wrapped](#whats-wrapped) — `v0.2.0` itself predates it.)
 
@@ -24,14 +26,15 @@ Verified this end to end: installed the package above into a throwaway venv with
 
 ## Local development
 
-Hacking on `rsact.py` itself (not just using it)? Clone the repo and use [`uv`](https://docs.astral.sh/uv/) from inside `examples/python` — this is the *only* place a clone is expected:
+Hacking on this package itself (not just using it)? Clone the repo and use [`uv`](https://docs.astral.sh/uv/) from inside this directory:
 
 ```sh
 cargo build --release -p rsact-ffi   # from the repo root, once
-uv run examples/python/tree.py
+cd crates/rsact-ffi/python
+uv run python3 -c "import rsact; print(rsact.terminal_size())"
 ```
 
-`uv run` provisions a Python interpreter and an editable install of this directory's `rsact` package into `.venv` if needed. This is what makes step 2 above find the library — that fallback exists for this workflow specifically, not for the installed-package one above.
+To exercise it against a real terminal, use the example scripts in [`examples/python`](https://github.com/MovingJu/Rsact/tree/main/examples/python) instead — they depend on this package the same way an external consumer would, but with a local-path override so iterating on this package's source is immediate, no publish/reinstall step.
 
 ## Quick start
 
@@ -66,14 +69,6 @@ with Tree(20, 2) as tree:
         )
 ```
 
-## Examples
-
-| Run it with | What it shows |
-|---|---|
-| `uv run examples/python/basic.py` | A single static frame (a horizontal line on row 0), then exits — mirrors `rsact-ffi`'s `basic.rs`/`examples/c/src/basic.c` |
-| `uv run examples/python/animate.py` | A `#` character moving across row 5 (~16ms/frame) — mirrors `animate.rs`/`animate.c` |
-| `uv run examples/python/tree.py` | A two-counter `Dashboard`, built through the component-tree API — mirrors `tree.rs`/`tree.c` |
-
 ## What's wrapped
 
 - `Terminal` — `rsact_create`/`set_cell`/`render`/`poll_key`/`close` (also a context manager)
@@ -84,7 +79,7 @@ with Tree(20, 2) as tree:
 
 As in the C API, `Terminal` and `Tree` are independent: don't call both on work meant to share one screen, since each tracks its own "what's actually on screen" baseline and mixing them will leave one stale.
 
-**On the auto-download fallback:** the release each `rsact.py` is pinned to (`_RSACT_VERSION`, currently `v0.2.0`) has to actually include a built shared library in its archive — this is new as of the release workflow change that added `_download_release_library`, so `v0.2.0` itself predates it and the fallback will report that clearly rather than silently failing. It'll start working from the next tagged release onward; `_RSACT_VERSION` (here) and `RSACT_VERSION` (in `examples/c/CMakeLists.txt`) need bumping together each time.
+**On the auto-download fallback:** the release each `rsact/__init__.py` is pinned to (`_RSACT_VERSION`, currently `v0.2.0`) has to actually include a built shared library in its archive — this is new as of the release workflow change that added `_download_release_library`, so `v0.2.0` itself predates it and the fallback will report that clearly rather than silently failing. It'll start working from the next tagged release onward; `_RSACT_VERSION` (here) and `RSACT_VERSION` (in `examples/c/CMakeLists.txt`) need bumping together each time.
 
 ## License
 

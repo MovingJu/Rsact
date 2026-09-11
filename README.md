@@ -49,8 +49,9 @@ Rsact/
 │   │                       # + component · element · tree (the v0.2.0 component-tree layer)
 │   ├── rsact-demo/        # rsact-core-only demo (animated rectangle + a Dashboard/Counter component tree)
 │   └── rsact-ffi/         # C ABI; build.rs generates include/rsact.h via cbindgen
+│       └── python/        # rsact-ffi's Python binding: a ctypes wrapper, no PyPI yet (see #24)
 ├── examples/c/             # 4 C examples (src/) linking a prebuilt rsact-ffi release via CMake FetchContent
-├── examples/python/        # ctypes wrapper (src/rsact/) + 3 example scripts, run via `uv run` (see #24)
+├── examples/python/        # 3 example scripts against crates/rsact-ffi/python, run via `uv run`
 ├── .github/workflows/      # PR title & commit message convention checks
 ├── CONTRIBUTING.md
 └── LICENSE (MIT)
@@ -152,10 +153,10 @@ The full C ABI surface is in [`crates/rsact-ffi/include/rsact.h`](https://github
 
 ### Using it from Python
 
-[`examples/python`](examples/python) is a pure-`ctypes` wrapper (standard `src/rsact/` layout) around the same C ABI — no compiled extension of its own, and not on PyPI yet (tracked in [#24](https://github.com/MovingJu/Rsact/issues/24)), but already installable straight from this repo — no clone needed, same as any git-hosted Python package:
+[`crates/rsact-ffi/python`](crates/rsact-ffi/python) is a pure-`ctypes` wrapper around the same C ABI — that crate's Python binding, the same way `crates/rsact-ffi/examples` holds its Rust ones. No compiled extension of its own, and not on PyPI yet (tracked in [#24](https://github.com/MovingJu/Rsact/issues/24)), but already installable straight from this repo — no clone needed, same as any git-hosted Python package:
 
 ```sh
-uv add "rsact @ git+https://github.com/MovingJu/Rsact.git#subdirectory=examples/python"
+uv add "rsact @ git+https://github.com/MovingJu/Rsact.git#subdirectory=crates/rsact-ffi/python"
 ```
 
 `import rsact` finds the native shared library itself — a local `cargo build --release -p rsact-ffi` if you happen to be developing inside a checkout, or (from a release built after this landed) auto-downloaded and SHA256-verified from the matching GitHub Release, so a plain installed-package user needs no Rust toolchain and no Rsact checkout at all.
@@ -176,7 +177,7 @@ with Tree(20, 2) as tree:
         )
 ```
 
-`text()`/`container()` return plain, immutable data (`Text`/`Container`) — no native handle, nothing to free; `Tree.present()` is the only place a tree gets compiled to real FFI elements. See [`examples/python/README.md`](examples/python/README.md) for the full API and all three examples (`basic.py`/`animate.py`/`tree.py`, mirroring the Rust/C ones).
+`text()`/`container()` return plain, immutable data (`Text`/`Container`) — no native handle, nothing to free; `Tree.present()` is the only place a tree gets compiled to real FFI elements. See [`crates/rsact-ffi/python/README.md`](crates/rsact-ffi/python/README.md) for the full API, and [`examples/python`](examples/python) for all three example scripts (`basic.py`/`animate.py`/`tree.py`, mirroring the Rust/C ones).
 
 ## How it works (the render pipeline)
 
@@ -282,7 +283,7 @@ A deeper concepts walkthrough with a nested-tree diagram lives on the [Component
 | `cargo run --example animate -p rsact-ffi` | A `#` character moving across row 5 (~16ms/frame) |
 | `cargo run --example tree -p rsact-ffi` | A two-counter `Dashboard`, built purely through the C-style `rsact_element_*`/`rsact_tree_*` API |
 | `examples/c/src/basic.c` · `animate.c` · `input.c` · `tree.c` | The same examples (plus key-input polling, plus the `Dashboard` component tree), reproduced in plain C against `rsact-ffi`'s header. [`examples/c/CMakeLists.txt`](https://github.com/MovingJu/Rsact/blob/main/examples/c/CMakeLists.txt) builds all four against a prebuilt `rsact-ffi` downloaded from the matching GitHub Release |
-| `uv run examples/python/basic.py` · `animate.py` · `tree.py` | The same three examples again, reproduced in Python against a pure-`ctypes` wrapper (`examples/python/src/rsact/`) — no compiled extension |
+| `uv run examples/python/basic.py` · `animate.py` · `tree.py` | The same three examples again, reproduced in Python against a pure-`ctypes` wrapper (`crates/rsact-ffi/python/`) — no compiled extension |
 
 ## Development
 
