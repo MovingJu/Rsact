@@ -245,7 +245,7 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
 name = "rsact-core"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "libc",
  "windows-sys",
@@ -253,14 +253,14 @@ dependencies = [
 
 [[package]]
 name = "rsact-demo"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "rsact-core",
 ]
 
 [[package]]
 name = "rsact-ffi"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "cbindgen",
  "rsact-core",
