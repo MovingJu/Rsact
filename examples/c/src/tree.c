@@ -1,12 +1,6 @@
 #include <stdio.h>
 #include "rsact.h"
 
-/* Not yet wired into CMakeLists.txt: examples/c links a *prebuilt*
- * rsact-ffi release binary (see CMakeLists.txt's RSACT_VERSION), and the
- * rsact_element_ and rsact_tree_ functions this file uses were only added
- * after the last tagged release. Add an executable target for this file
- * once RSACT_VERSION points at a release that ships them. */
-
 /* Builds one label/count counter as a small vertical container, its two
  * text children built inline as a C99 compound-literal array — one nested
  * expression, HTML-like, instead of naming each child and wiring it in
