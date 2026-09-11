@@ -2,24 +2,36 @@
 
 A pure-Python [`ctypes`](https://docs.python.org/3/library/ctypes.html) wrapper around [`rsact-ffi`](https://github.com/MovingJu/Rsact/tree/main/crates/rsact-ffi)'s C ABI. No compiled extension of its own — see [#24](https://github.com/MovingJu/Rsact/issues/24) if you're after a real PyPI package (a `rsact-py` crate built with PyO3/maturin); this is the lighter alternative discussed there, useful today without waiting on that.
 
-Standard `src/` layout (`src/rsact/__init__.py`), built with [`uv`](https://docs.astral.sh/uv/) — `uv run` is the default way to use anything here.
+## Install
 
-## Setup
-
-`import rsact` needs the native `rsact_ffi` **shared** library (the *static* lib the CMake C examples use won't load via `ctypes` — this needs a `.so`/`.dylib`/`.dll`). It's found automatically, checked in this order:
-
-1. The `RSACT_FFI_LIB` environment variable, if set (an exact path).
-2. `target/release/<libname>` relative to the repo root — for running straight out of a checkout after `cargo build --release -p rsact-ffi`.
-3. The system library search path (if `rsact_ffi` is installed system-wide).
-4. **Downloaded automatically** from the matching [GitHub Release](https://github.com/MovingJu/Rsact/releases), SHA256-verified, and cached under `~/.cache/rsact/` — so this works with **no Rust toolchain at all**. (Needs a release built after the shared library started being published; see the note in [What's wrapped](#whats-wrapped).)
-
-So the simplest path is just:
+Not on PyPI yet, but already a real installable package — `pip`/`uv` can pull it straight from this repo, same as any other git-hosted Python package. This is the intended way to use it; you don't need a clone of this repo to run the line below, or anything after it:
 
 ```sh
+uv add "rsact @ git+https://github.com/MovingJu/Rsact.git#subdirectory=examples/python"
+# or: pip install "git+https://github.com/MovingJu/Rsact.git#subdirectory=examples/python"
+```
+
+Once #24 lands, that becomes `uv add rsact` / `pip install rsact` — nothing about the API or this install shape changes, just the source `uv`/`pip` fetch it from.
+
+`import rsact` needs the native `rsact_ffi` **shared** library too (the *static* lib the CMake C examples use won't load via `ctypes`). It finds one automatically, checked in this order:
+
+1. The `RSACT_FFI_LIB` environment variable, if set (an exact path).
+2. `target/release/<libname>` relative to the repo root, if you happen to be running from inside a checkout with `rsact-ffi` already built — this is what makes `uv run` work for local development (see below), not something an installed-from-git user needs to think about.
+3. The system library search path (if `rsact_ffi` is installed system-wide).
+4. **Downloaded automatically** from the matching [GitHub Release](https://github.com/MovingJu/Rsact/releases), SHA256-verified, and cached under `~/.cache/rsact/` — this is the path a real `pip`/`uv` install actually takes, with **no Rust toolchain and no Rsact checkout involved at all**. (Needs a release built after the shared library started being published; see the note in [What's wrapped](#whats-wrapped) — `v0.2.0` itself predates it.)
+
+Verified this end to end: installed the package above into a throwaway venv with no Rsact checkout anywhere nearby, then ran a plain script doing nothing but `import rsact` from that venv's interpreter — it correctly skipped straight past steps 1–3 (nothing local to find) to step 4, downloaded and SHA256-verified the real release archive, and reported the expected "this release predates prebuilt shared libraries" once it got there.
+
+## Local development
+
+Hacking on `rsact.py` itself (not just using it)? Clone the repo and use [`uv`](https://docs.astral.sh/uv/) from inside `examples/python` — this is the *only* place a clone is expected:
+
+```sh
+cargo build --release -p rsact-ffi   # from the repo root, once
 uv run examples/python/tree.py
 ```
 
-`uv run` picks up this directory's `pyproject.toml`, provisions a Python interpreter and an editable install of the `rsact` package into `.venv` if needed, and runs the script — no `pip install` of your own required. Plain `python3 -m pip install -e examples/python && python3 examples/python/tree.py` works too, if you'd rather not use `uv`.
+`uv run` provisions a Python interpreter and an editable install of this directory's `rsact` package into `.venv` if needed. This is what makes step 2 above find the library — that fallback exists for this workflow specifically, not for the installed-package one above.
 
 ## Quick start
 

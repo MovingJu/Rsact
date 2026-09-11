@@ -152,11 +152,13 @@ The full C ABI surface is in [`crates/rsact-ffi/include/rsact.h`](https://github
 
 ### Using it from Python
 
-[`examples/python`](examples/python) is a pure-`ctypes` wrapper (standard `src/rsact/` layout) around the same C ABI — no compiled extension of its own (a real PyPI package via PyO3/maturin is tracked separately in [#24](https://github.com/MovingJu/Rsact/issues/24)). `import rsact` finds the native shared library itself — a local `cargo build --release -p rsact-ffi`, or (from a release built after this landed) auto-downloaded and SHA256-verified from the matching GitHub Release, so it works without a Rust toolchain at all. [`uv`](https://docs.astral.sh/uv/) is the default way to run it:
+[`examples/python`](examples/python) is a pure-`ctypes` wrapper (standard `src/rsact/` layout) around the same C ABI — no compiled extension of its own, and not on PyPI yet (tracked in [#24](https://github.com/MovingJu/Rsact/issues/24)), but already installable straight from this repo — no clone needed, same as any git-hosted Python package:
 
 ```sh
-uv run examples/python/tree.py
+uv add "rsact @ git+https://github.com/MovingJu/Rsact.git#subdirectory=examples/python"
 ```
+
+`import rsact` finds the native shared library itself — a local `cargo build --release -p rsact-ffi` if you happen to be developing inside a checkout, or (from a release built after this landed) auto-downloaded and SHA256-verified from the matching GitHub Release, so a plain installed-package user needs no Rust toolchain and no Rsact checkout at all.
 
 ```python
 from rsact import RSACT_LAYOUT_VERTICAL, Tree, container, text
