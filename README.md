@@ -48,10 +48,11 @@ Rsact/
 │   ├── rsact-core/        # buffer · cell · diff · renderer · term(+term_unix/term_windows) · input
 │   │                       # + component · element · tree (the v0.2.0 component-tree layer)
 │   ├── rsact-demo/        # rsact-core-only demo (animated rectangle + a Dashboard/Counter component tree)
-│   └── rsact-ffi/         # C ABI; build.rs generates include/rsact.h via cbindgen
-│       └── python/        # rsact-ffi's Python binding: a ctypes wrapper, no PyPI yet (see #24)
+│   ├── rsact-ffi/         # C ABI; build.rs generates include/rsact.h via cbindgen
+│   │   └── python/        # a ctypes wrapper around rsact-ffi's C ABI, no PyPI yet (see #24)
+│   └── rsact-py/           # native PyO3 bindings for rsact-core, excluded from [workspace] (see its Cargo.toml)
 ├── examples/c/             # 4 C examples (src/) linking a prebuilt rsact-ffi release via CMake FetchContent
-├── examples/python/        # 3 example scripts against crates/rsact-ffi/python, run via `uv run`
+├── examples/python/        # 3 example scripts against crates/rsact-py, run via `uv run`
 ├── .github/workflows/      # PR title & commit message convention checks
 ├── CONTRIBUTING.md
 └── LICENSE (MIT)
@@ -164,20 +165,22 @@ uv add "rsact @ git+https://github.com/MovingJu/Rsact.git#subdirectory=crates/rs
 ```python
 from rsact import RSACT_LAYOUT_VERTICAL, Tree, container, text
 
-with Tree(20, 2) as tree:
-    for count in range(5):
-        tree.present(
-            container(
-                "counter",
-                RSACT_LAYOUT_VERTICAL,
-                [text("label", "left", width=20), text("value", str(count), width=20)],
-                width=20,
-                height=2,
-            )
+tree = Tree(20, 2)
+for count in range(5):
+    tree.present(
+        container(
+            "counter",
+            RSACT_LAYOUT_VERTICAL,
+            [text("label", "left", width=20), text("value", str(count), width=20)],
+            width=20,
+            height=2,
         )
+    )
 ```
 
-`text()`/`container()` return plain, immutable data (`Text`/`Container`) — no native handle, nothing to free; `Tree.present()` is the only place a tree gets compiled to real FFI elements. See [`crates/rsact-ffi/python/README.md`](crates/rsact-ffi/python/README.md) for the full API, and [`examples/python`](examples/python) for all three example scripts (`basic.py`/`animate.py`/`tree.py`, mirroring the Rust/C ones).
+`text()`/`container()` return plain, immutable data (`Text`/`Container`) — no native handle, nothing to free; `Tree.present()` is the only place a tree gets compiled to real FFI elements. No `with` needed either — the terminal is restored automatically once `tree` is garbage-collected. See [`crates/rsact-ffi/python/README.md`](crates/rsact-ffi/python/README.md) for the full ctypes-binding API.
+
+A native [PyO3](https://pyo3.rs) alternative also exists — [`crates/rsact-py`](crates/rsact-py) — for compile-time-checked signatures and generated type stubs, at the cost of needing a Rust toolchain to build (no prebuilt-binary install path yet, unlike the `ctypes` one above). [`examples/python`](examples/python) exercises that one; see [`crates/rsact-py/README.md`](crates/rsact-py/README.md) for the full API.
 
 ## How it works (the render pipeline)
 
@@ -283,7 +286,7 @@ A deeper concepts walkthrough with a nested-tree diagram lives on the [Component
 | `cargo run --example animate -p rsact-ffi` | A `#` character moving across row 5 (~16ms/frame) |
 | `cargo run --example tree -p rsact-ffi` | A two-counter `Dashboard`, built purely through the C-style `rsact_element_*`/`rsact_tree_*` API |
 | `examples/c/src/basic.c` · `animate.c` · `input.c` · `tree.c` | The same examples (plus key-input polling, plus the `Dashboard` component tree), reproduced in plain C against `rsact-ffi`'s header. [`examples/c/CMakeLists.txt`](https://github.com/MovingJu/Rsact/blob/main/examples/c/CMakeLists.txt) builds all four against a prebuilt `rsact-ffi` downloaded from the matching GitHub Release |
-| `uv run examples/python/basic.py` · `animate.py` · `tree.py` | The same three examples again, reproduced in Python against a pure-`ctypes` wrapper (`crates/rsact-ffi/python/`) — no compiled extension |
+| `uv run examples/python/basic.py` · `animate.py` · `tree.py` | The same three examples again, reproduced in Python against native PyO3 bindings (`crates/rsact-py/`) — a `ctypes`-based alternative also exists at `crates/rsact-ffi/python/` |
 
 ## Development
 

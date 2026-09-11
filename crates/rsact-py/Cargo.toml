@@ -1,0 +1,28 @@
+[package]
+# Excluded from the root [workspace] (see Cargo.toml there for why), so
+# unlike every other crates/* member it can't use `field.workspace = true`
+# inheritance — these are plain values, kept in sync with the workspace
+# version by hand, same as examples/c/CMakeLists.txt's RSACT_VERSION and
+# crates/rsact-ffi/python's _RSACT_VERSION already are.
+name = "rsact-py"
+version = "0.2.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/MovingJu/Rsact"
+description = "PyO3 bindings for rsact-core"
+
+[lib]
+name = "rsact"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "stub_gen"
+path = "src/bin/stub_gen.rs"
+
+[dependencies]
+rsact-core = { path = "../rsact-core", version = "0.2.0" }
+pyo3 = "0.29.2"
+pyo3-stub-gen = "0.23.0"
+
+[build-dependencies]
+pyo3-build-config = "0.29.2"

@@ -1,4 +1,7 @@
 /target
+# rsact-py is excluded from the root [workspace] (see Cargo.toml), so it
+# builds into its own target/ here instead of the shared one above.
+/crates/rsact-py/target
 build
 __pycache__
 .venv

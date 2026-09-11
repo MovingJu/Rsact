@@ -13,11 +13,13 @@ from rsact import Terminal
 
 
 def main() -> None:
-    with Terminal(40, 10) as term:
-        for frame in range(100):
-            term.set_cell(5, frame % 40, "#")
-            term.render()
-            time.sleep(0.016)
+    # No `with`: Terminal restores the terminal on garbage collection via
+    # Rust's own Drop (RawModeGuard) — see basic.py's comment.
+    term = Terminal(40, 10)
+    for frame in range(100):
+        term.set_cell(5, frame % 40, "#")
+        term.render()
+        time.sleep(0.016)
 
 
 if __name__ == "__main__":

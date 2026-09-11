@@ -1,6 +1,13 @@
 [workspace]
 resolver = "2"
 members = ["crates/*"]
+# rsact-py needs a linkable libpython to build/test at all (even with
+# `cargo build`/`test`, not just via maturin) — not guaranteed on every
+# machine (e.g. some standalone/uv-managed CPython builds lack a shared
+# lib). Excluding it keeps `cargo build/test/clippy --workspace` exactly
+# as before for everyone else; it's built independently via maturin/uv,
+# using its own manifest path, not through workspace `-p`/`--workspace`.
+exclude = ["crates/rsact-py"]
 
 [workspace.package]
 version = "0.2.0"

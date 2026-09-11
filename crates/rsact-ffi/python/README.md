@@ -43,10 +43,10 @@ To exercise it against a real terminal, use the example scripts in [`examples/py
 ```python
 from rsact import Terminal
 
-with Terminal(40, 10) as term:
-    for col in range(40):
-        term.set_cell(0, col, "-")
-    term.render()
+term = Terminal(40, 10)  # no `with` needed — __del__ restores the terminal on GC
+for col in range(40):
+    term.set_cell(0, col, "-")
+term.render()
 ```
 
 ### Component tree (`text` / `container` / `Tree`)
@@ -56,17 +56,17 @@ Python has no `Component` trait to implement, same as the C binding: rebuild the
 ```python
 from rsact import RSACT_LAYOUT_VERTICAL, Tree, container, text
 
-with Tree(20, 2) as tree:
-    for count in range(5):
-        tree.present(
-            container(
-                "counter",
-                RSACT_LAYOUT_VERTICAL,
-                [text("label", "left", width=20), text("value", str(count), width=20)],
-                width=20,
-                height=2,
-            )
+tree = Tree(20, 2)  # no `with` needed here either
+for count in range(5):
+    tree.present(
+        container(
+            "counter",
+            RSACT_LAYOUT_VERTICAL,
+            [text("label", "left", width=20), text("value", str(count), width=20)],
+            width=20,
+            height=2,
         )
+    )
 ```
 
 ## What's wrapped

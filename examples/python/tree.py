@@ -12,10 +12,10 @@ Run with: uv run examples/python/tree.py
 
 import time
 
-from rsact import RSACT_LAYOUT_HORIZONTAL, RSACT_LAYOUT_VERTICAL, Node, Tree, container, text
+from rsact import RSACT_LAYOUT_HORIZONTAL, RSACT_LAYOUT_VERTICAL, Container, Tree, container, text
 
 
-def counter(label: str, count: int) -> Node:
+def counter(label: str, count: int) -> Container:
     return container(
         label,
         RSACT_LAYOUT_VERTICAL,
@@ -25,7 +25,7 @@ def counter(label: str, count: int) -> Node:
     )
 
 
-def dashboard(left_count: int, right_count: int) -> Node:
+def dashboard(left_count: int, right_count: int) -> Container:
     return container(
         "dashboard",
         RSACT_LAYOUT_HORIZONTAL,
@@ -36,10 +36,12 @@ def dashboard(left_count: int, right_count: int) -> Node:
 
 
 def main() -> None:
-    with Tree(40, 2) as tree:
-        for frame in range(5):
-            tree.present(dashboard(frame, 42))
-            time.sleep(0.5)
+    # No `with`: Tree restores the terminal on garbage collection via
+    # Rust's own Drop (RawModeGuard) — see basic.py's comment.
+    tree = Tree(40, 2)
+    for frame in range(5):
+        tree.present(dashboard(frame, 42))
+        time.sleep(0.5)
 
 
 if __name__ == "__main__":

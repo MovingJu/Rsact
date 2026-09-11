@@ -8,10 +8,8 @@ dependencies = ["rsact"]
 # `rsact` above is a normal dependency specifier, same as any project that
 # consumes the package would write. This override only applies when uv
 # runs *from inside this repo* — it resolves that dependency to the local,
-# editable crates/rsact-ffi/python instead of fetching it, purely so
-# `uv run` here iterates fast without a network round-trip. An external
-# consumer's own pyproject.toml has no such override; see
-# crates/rsact-ffi/python/README.md for how they'd actually install it
-# (a git+subdirectory URL today, plain `rsact` once #24 publishes to PyPI).
+# editable crates/rsact-py instead of fetching it, purely so `uv run` here
+# iterates fast without a network round-trip. An external consumer's own
+# pyproject.toml has no such override.
 [tool.uv.sources]
-rsact = { path = "../../crates/rsact-ffi/python", editable = true }
+rsact = { path = "../../crates/rsact-py", editable = true }
